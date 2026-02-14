@@ -335,7 +335,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         type: 'moderator',
         name: 'Maya',
         speakerId: finalModeratorId,  // Store moderator ID
-        voiceId: 'guide-voice', // Default moderator voice
+        voiceId: 'uYXf8XasLslADfZ2MB4u', // Default moderator voice
       },
       // Index 1: User/Participant
       {
@@ -671,6 +671,9 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   }),
 
   setVideoInitialized: (agentId, initialized) => set((state) => {
+    const current = state.videoInitializedStates.get(agentId);
+    if (current === initialized) return {};
+
     const newInitializedStates = new Map(state.videoInitializedStates);
     newInitializedStates.set(agentId, initialized);
     console.log(`[Store] Avatar ${agentId} initialized state: ${initialized}`);

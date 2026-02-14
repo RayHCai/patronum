@@ -7,12 +7,12 @@ const ELEVENLABS_API_URL = 'https://api.elevenlabs.io/v1';
 
 // Voice ID mapping (using ElevenLabs pre-made voices)
 const VOICE_MAP: Record<string, string> = {
-  mary_voice_en: '21m00Tcm4TlvDq8ikWAM', // Rachel - warm female
-  robert_voice_en: 'VR6AewLTigWG4xSOukaG', // Arnold - friendly male
-  susan_voice_en: 'EXAVITQu4vr4xnSDxMaL', // Bella - calm female
-  james_voice_en: 'ErXwobaYiN019PkySvjV', // Antoni - expressive male
-  patricia_voice_en: 'MF3mGyEYCl7XYWbV9V6O', // Elli - caring female
-  moderator_voice: 'pNInz6obpgDQGcFmaJgB', // Adam - professional male
+  mary_voice_en: 'uYXf8XasLslADfZ2MB4u', // Rachel - warm female
+  robert_voice_en: 'bISW1PJRBPT7aRbtPJlB', // Arnold - friendly male
+  susan_voice_en: 'MClEFoImJXBTgLwdLI5n', // Bella - calm female
+  james_voice_en: 'j06nw9Co1V47P1pQkaG8', // Antoni - expressive male
+  patricia_voice_en: 'EST9Ui6982FZPSi7gCHi', // Elli - caring female
+  moderator_voice: 'WLKp2jV6nrS8aMkPPDRO', // Adam - professional male
 };
 
 // Minimal valid silent MP3 (1 second of silence)

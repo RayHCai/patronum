@@ -26,7 +26,7 @@ const generateAgentProfiles = async (
         quirks: ['Often quotes classic literature', 'Loves to share recipes'],
       },
       avatarColor: '#8B5CF6',
-      voiceId: 'mary_voice_en',
+      voiceId: 'uYXf8XasLslADfZ2MB4u',
     },
     {
       name: 'Robert Chen',

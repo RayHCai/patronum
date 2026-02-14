@@ -28,8 +28,12 @@ export default function AvatarVideoPlayer({
   onVideoReady,
   onVideoError,
 }: AvatarVideoPlayerProps) {
-  const store = useConversationStore();
-  const activeStreams = store.activeVideoStreams;
+  // Use selectors to avoid subscribing to everything and to get stable action references
+  const activeStreams = useConversationStore(state => state.activeVideoStreams);
+  const setVideoLoading = useConversationStore(state => state.setVideoLoading);
+  const setVideoError = useConversationStore(state => state.setVideoError);
+  const setVideoInitialized = useConversationStore(state => state.setVideoInitialized);
+
   const isStreamActive = activeStreams.has(agentId);
 
   // Only initialize HeyGen if stream is marked as active in store
@@ -51,21 +55,21 @@ export default function AvatarVideoPlayer({
 
   // Update store loading state
   useEffect(() => {
-    store.setVideoLoading(agentId, isLoading);
-  }, [isLoading, agentId]);
+    setVideoLoading(agentId, isLoading);
+  }, [isLoading, agentId, setVideoLoading]);
 
   // Update store error state
   useEffect(() => {
-    store.setVideoError(agentId, error);
+    setVideoError(agentId, error);
     if (error && onVideoError) {
       onVideoError(error);
     }
-  }, [error, agentId, onVideoError]);
+  }, [error, agentId, onVideoError, setVideoError]);
 
   // Update store initialized state
   useEffect(() => {
-    store.setVideoInitialized(agentId, isInitialized);
-  }, [isInitialized, agentId]);
+    setVideoInitialized(agentId, isInitialized);
+  }, [isInitialized, agentId, setVideoInitialized]);
 
   // Notify when video is ready
   useEffect(() => {
@@ -85,9 +89,13 @@ export default function AvatarVideoPlayer({
     } else if (isStreamActive && !hasValidConfig) {
       console.warn(`[AvatarVideoPlayer] Stream marked active for ${name} but no valid HeyGen config - skipping initialization`);
       // Mark as initialized (with error) to prevent infinite loops
-      store.setVideoInitialized(agentId, false);
+      // We set it to false, but we need to ensure we don't loop. 
+      // Since isStreamActive is true, and we are not initializing, this branch would run again if dependencies change.
+      // But now 'store' is not a dependency. 'setVideoInitialized' is stable.
+      // So this effect will NOT run again just because we called setVideoInitialized.
+      setVideoInitialized(agentId, false);
     }
-  }, [isStreamActive, isInitialized, isLoading, error, initialize, name, heygenConfig, agentId, store]);
+  }, [isStreamActive, isInitialized, isLoading, error, initialize, name, heygenConfig, agentId, setVideoInitialized]);
 
   // Register with avatar manager when initialized
   useEffect(() => {
