@@ -8,9 +8,16 @@ const globalForPrisma = globalThis as unknown as {
   pool: Pool | undefined;
 };
 
-// Create connection pool
+// Create connection pool with Neon-optimized settings
 const pool = globalForPrisma.pool ?? new Pool({
   connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false, // Required for Neon
+  },
+  connectionTimeoutMillis: 30000, // 30 seconds
+  idleTimeoutMillis: 30000,
+  max: 20, // Maximum pool size
+  statement_timeout: 30000, // Query timeout
 });
 
 // Create Prisma adapter
