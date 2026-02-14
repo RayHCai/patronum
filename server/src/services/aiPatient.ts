@@ -4,9 +4,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config';
 import { ConversationContext, TurnData } from '../types';
 import { removeExpressions, stripMarkdownCodeFences, anthropic } from './claude';
-
-// Number of AI agent participants in each session
-const NUM_AI_AGENTS = 2;
+import { NUM_AI_AGENTS, AGENT_COLORS } from '../constants/config';
 
 // ========================================
 // Prompt Templates
@@ -220,64 +218,92 @@ export const extractMemories = async (
 // ========================================
 
 /**
- * Step 1: Generate a list of personality traits
+ * Step 1: Generate personality profiles (names + traits)
+ *
+ * FIX: Previously, we generated traits separately and then let Claude choose names
+ * for each agent individually. This caused duplicate names (e.g., Margaret Chen appearing 3x).
+ * Now we generate both names AND traits upfront in a single call to ensure all names are unique.
  */
-const generateAgentTraits = async (
+interface PersonalityProfile {
+  name: string;
+  trait: string;
+}
+
+const generateAgentProfiles = async (
   topic: string,
   count: number
-): Promise<string[]> => {
-  console.log(`[AI Patient] Generating ${count} personality traits for topic: "${topic}"`);
+): Promise<PersonalityProfile[]> => {
+  console.log(`[AI Patient] Generating ${count} unique agent profiles for topic: "${topic}"`);
 
-  const prompt = `Generate a list of EXACTLY ${count} unique personality traits for diverse participants in a supportive group conversation about "${topic}".
+  const prompt = `Generate EXACTLY ${count} unique personality profiles for diverse participants in a supportive group conversation about "${topic}".
 
-Each trait should be 2-4 words describing a personality type (e.g., "warm retired teacher", "cheerful gardening enthusiast", "thoughtful former librarian", "witty cookbook author").
+Each profile should have:
+- A UNIQUE full name (first and last name, ensure ALL names are completely different)
+- A 2-4 word personality trait (e.g., "warm retired teacher", "cheerful gardening enthusiast")
 
-Respond with ONLY a JSON array of ${count} trait strings:
-["trait1", "trait2", "trait3"]
+Age range: 60-75
+Background: retired professionals with diverse cultural backgrounds
 
-CRITICAL: The array must contain exactly ${count} items.`;
+Respond with ONLY a JSON array containing EXACTLY ${count} profiles in this format:
+[
+  {"name": "Full Name 1", "trait": "personality trait 1"},
+  {"name": "Full Name 2", "trait": "personality trait 2"}
+]
+
+CRITICAL REQUIREMENTS:
+1. The array MUST contain exactly ${count} profiles - no more, no less
+2. ALL names must be completely unique and different
+3. Ensure cultural diversity in names`;
 
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-4-5-20250929',
-    max_tokens: 500,
+    max_tokens: 800,
     temperature: 0.9,
     messages: [{ role: 'user', content: prompt }],
   });
 
   const responseText = message.content[0].type === 'text' ? message.content[0].text : '[]';
   const cleanedText = stripMarkdownCodeFences(responseText);
-  const traits = JSON.parse(cleanedText);
+  const profiles = JSON.parse(cleanedText);
 
-  console.log(`[AI Patient] Generated ${traits.length} traits:`, traits);
+  console.log(`[AI Patient] Generated ${profiles.length} profiles:`, profiles);
 
   // Ensure we have exactly the right count
-  return traits.slice(0, count);
+  const slicedProfiles = profiles.slice(0, count);
+
+  // Log final profiles
+  slicedProfiles.forEach((p: PersonalityProfile, i: number) => {
+    console.log(`[AI Patient]   Profile ${i + 1}: ${p.name} - ${p.trait}`);
+  });
+
+  return slicedProfiles;
 };
 
 /**
- * Generate a single agent from a trait
+ * Generate a single agent from a profile
  */
-const generateSingleAgentFromTrait = async (
-  trait: string,
+const generateSingleAgentFromProfile = async (
+  profile: PersonalityProfile,
   topic: string,
   color: string,
   index: number
 ): Promise<any> => {
-  console.log(`[AI Patient] Generating agent ${index + 1} with trait: "${trait}"`);
+  console.log(`[AI Patient] Generating agent ${index + 1}: ${profile.name} with trait: "${profile.trait}"`);
 
   const prompt = `Create ONE agent personality for a supportive group conversation about "${topic}".
 
-Personality trait: ${trait}
+REQUIRED NAME: ${profile.name} (you MUST use this exact name)
+Personality trait: ${profile.trait}
 
 Create an agent with:
+- Name: ${profile.name} (MUST use this exact name)
 - Age: 60-75
-- Background: retired profession, hometown, family, interests
-- Personality: speaking style, quirks
-- Cultural background
+- Background: retired profession, hometown, family, interests (should match the name's cultural background)
+- Personality: speaking style, quirks that reflect the trait
 
 Respond with ONLY this JSON object:
 {
-  "name": "Full Name",
+  "name": "${profile.name}",
   "age": 68,
   "background": {
     "occupation": "Retired profession",
@@ -322,33 +348,27 @@ export const generateAgentPersonalities = async (
   console.log(`[AI Patient] PARALLEL AGENT GENERATION`);
   console.log(`[AI Patient] ==========================================`);
   console.log(`[AI Patient] Topic: "${topic}", Count: ${count}`);
+  console.log(`[AI Patient] NUM_AI_AGENTS constant: ${NUM_AI_AGENTS}`);
+  console.log(`[AI Patient] Requested count: ${count}`);
   console.log(`[AI Patient] Participant background length: ${participantBackground.length} characters`);
 
   const startTime = Date.now();
-  const colors = [
-    '#8B5CF6', // purple
-    '#EC4899', // pink
-    '#F59E0B', // amber
-    '#3B82F6', // blue
-    '#10B981', // green
-    '#EF4444', // red
-    '#6366F1', // indigo
-    '#8B5CF6', // violet
-    '#F97316', // orange
-    '#06B6D4', // cyan
-  ];
 
   try {
-    // Step 1: Generate traits
-    console.log(`[AI Patient] Step 1: Generating ${count} personality traits...`);
-    const traits = await generateAgentTraits(topic, count);
-    console.log(`[AI Patient] ✓ Generated ${traits.length} traits:`, traits);
+    // Step 1: Generate profiles (names + traits)
+    console.log(`[AI Patient] Step 1: Generating ${count} unique agent profiles...`);
+    const profiles = await generateAgentProfiles(topic, count);
+    console.log(`[AI Patient] ✓ Generated ${profiles.length} profiles (requested: ${count})`);
 
-    // Step 2: Generate each agent in parallel
-    console.log(`[AI Patient] Step 2: Generating ${count} agents in parallel...`);
+    if (profiles.length !== count) {
+      console.warn(`[AI Patient] ⚠️ WARNING: Requested ${count} profiles but got ${profiles.length}!`);
+    }
 
-    const agentPromises = traits.map((trait, index) =>
-      generateSingleAgentFromTrait(trait, topic, colors[index % colors.length], index)
+    // Step 2: Generate each agent in parallel using the profiles
+    console.log(`[AI Patient] Step 2: Generating ${profiles.length} agents in parallel...`);
+
+    const agentPromises = profiles.map((profile, index) =>
+      generateSingleAgentFromProfile(profile, topic, AGENT_COLORS[index % AGENT_COLORS.length], index)
     );
 
     const agents = await Promise.all(agentPromises);

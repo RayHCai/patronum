@@ -3,11 +3,9 @@ import { useCallback, useRef } from 'react';
 import { useConversationStore } from '../stores/conversationStore';
 import { Turn } from '../types';
 import StreamingAvatar from '@heygen/streaming-avatar';
+import { NUM_AI_AGENTS } from '../constants/config';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-// Number of AI agent participants in each session
-const NUM_AI_AGENTS = 2;
 
 interface HeygenAvatarInstance {
   agentId: string;

@@ -5,11 +5,9 @@ import { prisma } from '../prisma/client';
 import { generateModeratorOpening } from '../services/aiModerator';
 import { generateAgentPersonalities } from '../services/aiPatient';
 import { getHeygenService } from '../services/heygen';
+import { NUM_AI_AGENTS } from '../constants/config';
 
 const router = Router();
-
-// Number of AI agent participants in each session
-const NUM_AI_AGENTS = 2;
 
 /**
  * POST /api/sessions/initialize

@@ -4,11 +4,9 @@ import { GenerateAgentResponseDTO, GeneratePersonalitiesDTO, ConversationContext
 import * as aiPatientService from '../services/aiPatient';
 import * as agentService from '../services/agent';
 import { prisma } from '../prisma/client';
+import { NUM_AI_AGENTS } from '../constants/config';
 
 const router = Router();
-
-// Number of AI agent participants in each session
-const NUM_AI_AGENTS = 2;
 
 /**
  * POST /api/ai-patients/generate-response
