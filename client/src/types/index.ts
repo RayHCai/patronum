@@ -236,6 +236,16 @@ export interface SessionAnalytics {
   topicCoherenceScore?: number;
   repeatedPhrases?: Array<{ phrase: string; count: number }>;
   repeatedStories?: Array<{ story: string; count: number }>;
+  sentimentAnalysis?: {
+    overallSentiment: 'positive' | 'neutral' | 'negative' | 'mixed';
+    emotionalTone?: any;
+    cognitiveIndicators?: any;
+    communicationPatterns?: any;
+    socialEngagement?: any;
+    concernFlags?: string[];
+    positiveIndicators?: string[];
+    summary?: string;
+  };
   computedAt: string;
 }
 

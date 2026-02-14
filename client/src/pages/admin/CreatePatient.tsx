@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { createPatient, type CreatePatientData } from '../../services/participants';
@@ -67,90 +66,93 @@ export default function CreatePatient() {
 
   if (createdPatient) {
     return (
-      <div className="min-h-screen bg-gray-50 p-8">
-        <div className="max-w-3xl mx-auto">
+      <div className="min-h-screen bg-[var(--color-bg-primary)] relative overflow-hidden p-8">
+        <div className="absolute inset-0 bg-gradient-to-br from-red-50/30 via-white to-red-50/20 pointer-events-none" />
+        <div className="max-w-3xl mx-auto relative z-10">
           {/* Success Header */}
-          <motion.div
-            className="bg-white rounded-2xl shadow-md border border-gray-200 p-8 mb-6"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
+          <div className="bg-white border border-gray-200 p-8 mb-6">
             <div className="flex items-center gap-4 mb-4">
-              <div className="p-3 bg-green-100 rounded-full">
-                <CheckCircle2 className="text-green-600" size={32} />
+              <div className="p-2 bg-green-50 border border-green-200">
+                <CheckCircle2 className="text-green-600" size={24} />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">
-                  Patient Created Successfully!
+                <h1
+                  className="text-2xl font-bold text-gray-900 tracking-tight"
+                  style={{ fontFamily: 'var(--font-sans)' }}
+                >
+                  Patient Created Successfully
                 </h1>
-                <p className="text-gray-600 mt-1">
+                <p
+                  className="text-sm text-gray-600 mt-1"
+                  style={{ fontFamily: 'var(--font-sans)' }}
+                >
                   {createdPatient.name} has been added to the system
                 </p>
               </div>
             </div>
-          </motion.div>
+          </div>
 
           {/* Access Link Section */}
           {createdPatient.id && (
-            <motion.div
-              className="bg-blue-50 rounded-2xl border border-blue-200 p-8 mb-6"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <h2 className="text-xl font-semibold text-gray-900 mb-3">
+            <div className="bg-blue-50 border border-blue-200 p-6 mb-6">
+              <h2
+                className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-2"
+                style={{ fontFamily: 'var(--font-sans)' }}
+              >
                 Patient Access Link
               </h2>
-              <p className="text-sm text-gray-600 mb-4">
+              <p
+                className="text-sm text-gray-700 mb-4"
+                style={{ fontFamily: 'var(--font-sans)' }}
+              >
                 Share this link with the patient or caregiver. It can be used multiple times and never expires.
               </p>
-              <div className="flex gap-3">
+              <div className="flex gap-2">
                 <input
                   type="text"
                   value={`${window.location.origin}/patient/access?id=${createdPatient.id}`}
                   readOnly
-                  className="flex-1 px-4 py-3 bg-white border border-gray-300 rounded-xl text-sm font-mono select-all"
+                  className="flex-1 px-3 py-2 bg-white border border-gray-300 text-xs font-mono select-all focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                   onClick={(e) => e.currentTarget.select()}
+                  style={{ fontFamily: 'monospace' }}
                 />
                 <button
                   onClick={() => {
                     const accessUrl = `${window.location.origin}/patient/access?id=${createdPatient.id}`;
                     navigator.clipboard.writeText(accessUrl);
-                    // Optional: Add toast notification here
                   }}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-semibold whitespace-nowrap transition-colors"
+                  className="px-4 py-2 bg-[var(--color-accent)] text-white hover:opacity-90 font-medium whitespace-nowrap transition-opacity text-sm"
+                  style={{ fontFamily: 'var(--font-sans)' }}
                 >
                   Copy Link
                 </button>
               </div>
-            </motion.div>
+            </div>
           )}
 
           {/* Action Buttons */}
-          <motion.div
-            className="flex gap-4 mt-6"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.4 }}
-          >
+          <div className="flex gap-3">
             <button
               onClick={() => navigate(`/admin/patients/${createdPatient.id}`)}
-              className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              className="flex-1 px-5 py-2.5 bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity font-medium text-sm"
+              style={{ fontFamily: 'var(--font-sans)' }}
             >
               View Patient Profile
             </button>
             <button
               onClick={() => window.location.reload()}
-              className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+              className="flex-1 px-5 py-2.5 bg-white text-gray-900 border border-gray-300 hover:bg-gray-50 transition-colors font-medium text-sm"
+              style={{ fontFamily: 'var(--font-sans)' }}
             >
               Create Another Patient
             </button>
-          </motion.div>
+          </div>
 
-          <div className="mt-6 text-center">
+          <div className="mt-4 text-center">
             <button
               onClick={() => navigate('/admin/patients')}
-              className="text-gray-600 hover:text-gray-900 transition-colors font-medium"
+              className="text-sm text-gray-600 hover:text-gray-900 transition-colors font-medium"
+              style={{ fontFamily: 'var(--font-sans)' }}
             >
               Back to Patient List
             </button>
@@ -161,79 +163,102 @@ export default function CreatePatient() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-3xl mx-auto">
+    <div className="min-h-screen bg-[var(--color-bg-primary)] relative overflow-hidden p-8">
+      <div className="absolute inset-0 bg-gradient-to-br from-red-50/30 via-white to-red-50/20 pointer-events-none" />
+      <div className="max-w-3xl mx-auto relative z-10">
         {/* Header */}
         <div className="mb-6">
           <button
             onClick={() => navigate('/admin/patients')}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors mb-4"
+            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors mb-4 font-medium"
+            style={{ fontFamily: 'var(--font-sans)' }}
           >
-            <ArrowLeft size={20} />
+            <ArrowLeft size={16} />
             <span>Back to Patients</span>
           </button>
 
-          <h1 className="text-3xl font-bold text-gray-900">Create New Patient</h1>
-          <p className="text-gray-600 mt-1">
+          <h1
+            className="text-3xl font-bold text-gray-900 tracking-tight"
+            style={{ fontFamily: 'var(--font-sans)' }}
+          >
+            Create New Patient
+          </h1>
+          <p
+            className="text-sm text-gray-600 mt-1"
+            style={{ fontFamily: 'var(--font-sans)' }}
+          >
             Add a new patient to the system
           </p>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-md border border-gray-200 p-8">
+        <form
+          onSubmit={handleSubmit}
+          className="bg-white border border-gray-200 p-8"
+        >
           {/* Error Message */}
-          <AnimatePresence>
-            {error && (
-              <motion.div
-                className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg"
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-              >
-                <p className="text-sm font-medium text-red-800">{error}</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200">
+              <p className="text-sm font-medium text-red-900">{error}</p>
+            </div>
+          )}
 
           {/* Patient Information */}
           <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Patient Information</h2>
+            <h2
+              className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-4"
+              style={{ fontFamily: 'var(--font-sans)' }}
+            >
+              Patient Information
+            </h2>
 
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Name <span className="text-red-500">*</span>
+                <label
+                  className="block text-sm font-medium text-gray-900 mb-2"
+                  style={{ fontFamily: 'var(--font-sans)' }}
+                >
+                  Name <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => handleInputChange('name', e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)]"
+                  style={{ fontFamily: 'var(--font-sans)' }}
                   placeholder="John Doe"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  className="block text-sm font-medium text-gray-900 mb-2"
+                  style={{ fontFamily: 'var(--font-sans)' }}
+                >
                   Date of Birth
                 </label>
                 <input
                   type="date"
                   value={formData.dateOfBirth}
                   onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)]"
+                  style={{ fontFamily: 'var(--font-sans)' }}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  className="block text-sm font-medium text-gray-900 mb-2"
+                  style={{ fontFamily: 'var(--font-sans)' }}
+                >
                   Notes
                 </label>
                 <textarea
                   value={formData.notes}
                   onChange={(e) => handleInputChange('notes', e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)]"
+                  style={{ fontFamily: 'var(--font-sans)' }}
                   placeholder="Additional notes about the patient..."
                   rows={3}
                 />
@@ -243,61 +268,80 @@ export default function CreatePatient() {
 
           {/* Caregiver Information */}
           <div className="mb-8 pt-8 border-t border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
+            <h2
+              className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-4"
+              style={{ fontFamily: 'var(--font-sans)' }}
+            >
               Caregiver Information (Optional)
             </h2>
 
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  className="block text-sm font-medium text-gray-900 mb-2"
+                  style={{ fontFamily: 'var(--font-sans)' }}
+                >
                   Caregiver Name
                 </label>
                 <input
                   type="text"
                   value={formData.caregiver?.name || ''}
                   onChange={(e) => handleCaregiverChange('name', e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)]"
+                  style={{ fontFamily: 'var(--font-sans)' }}
                   placeholder="Jane Doe"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    className="block text-sm font-medium text-gray-900 mb-2"
+                    style={{ fontFamily: 'var(--font-sans)' }}
+                  >
                     Email
                   </label>
                   <input
                     type="email"
                     value={formData.caregiver?.email || ''}
                     onChange={(e) => handleCaregiverChange('email', e.target.value)}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)]"
+                    style={{ fontFamily: 'var(--font-sans)' }}
                     placeholder="caregiver@example.com"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    className="block text-sm font-medium text-gray-900 mb-2"
+                    style={{ fontFamily: 'var(--font-sans)' }}
+                  >
                     Phone
                   </label>
                   <input
                     type="tel"
                     value={formData.caregiver?.phone || ''}
                     onChange={(e) => handleCaregiverChange('phone', e.target.value)}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)]"
+                    style={{ fontFamily: 'var(--font-sans)' }}
                     placeholder="(555) 123-4567"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  className="block text-sm font-medium text-gray-900 mb-2"
+                  style={{ fontFamily: 'var(--font-sans)' }}
+                >
                   Relationship
                 </label>
                 <input
                   type="text"
                   value={formData.caregiver?.relationship || ''}
                   onChange={(e) => handleCaregiverChange('relationship', e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)]"
+                  style={{ fontFamily: 'var(--font-sans)' }}
                   placeholder="Daughter, Son, Spouse, etc."
                 />
               </div>
@@ -305,18 +349,20 @@ export default function CreatePatient() {
           </div>
 
           {/* Submit Button */}
-          <div className="flex gap-4">
+          <div className="flex gap-3">
             <button
               type="button"
               onClick={() => navigate('/admin/patients')}
-              className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+              className="flex-1 px-5 py-2.5 bg-white text-gray-900 border border-gray-300 hover:bg-gray-50 transition-colors font-medium text-sm disabled:opacity-50"
+              style={{ fontFamily: 'var(--font-sans)' }}
               disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-5 py-2.5 bg-gray-900 text-white hover:bg-gray-800 transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ fontFamily: 'var(--font-sans)' }}
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Creating Patient...' : 'Create Patient'}
