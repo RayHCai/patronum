@@ -62,6 +62,11 @@ export default function AvatarVideoPlayer({
     }
   }, [error, agentId, onVideoError]);
 
+  // Update store initialized state
+  useEffect(() => {
+    store.setVideoInitialized(agentId, isInitialized);
+  }, [isInitialized, agentId]);
+
   // Notify when video is ready
   useEffect(() => {
     if (isInitialized && stream && onVideoReady) {
@@ -71,15 +76,22 @@ export default function AvatarVideoPlayer({
 
   // Initialize when stream becomes active
   useEffect(() => {
-    if (isStreamActive && !isInitialized && !isLoading && !error) {
+    // Only initialize if we have a valid heygenConfig with avatarId
+    const hasValidConfig = heygenConfig && heygenConfig.avatarId && heygenConfig.avatarId.trim().length > 0;
+
+    if (isStreamActive && !isInitialized && !isLoading && !error && hasValidConfig) {
       console.log(`[AvatarVideoPlayer] Initializing video for ${name}`);
       initialize();
+    } else if (isStreamActive && !hasValidConfig) {
+      console.warn(`[AvatarVideoPlayer] Stream marked active for ${name} but no valid HeyGen config - skipping initialization`);
+      // Mark as initialized (with error) to prevent infinite loops
+      store.setVideoInitialized(agentId, false);
     }
-  }, [isStreamActive, isInitialized, isLoading, error, initialize, name]);
+  }, [isStreamActive, isInitialized, isLoading, error, initialize, name, heygenConfig, agentId, store]);
 
   // Register with avatar manager when initialized
   useEffect(() => {
-    if (isInitialized && speak && stop) {
+    if (isInitialized) {
       avatarManager.register(agentId, { agentId, speak, stop });
       return () => {
         avatarManager.unregister(agentId);

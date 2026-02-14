@@ -1,11 +1,14 @@
 // AI Patients (Agents) Routes
 import { Router, Request } from 'express';
-import { GenerateAgentResponseDTO, GeneratePersonalitiesDTO } from '../types';
+import { GenerateAgentResponseDTO, GeneratePersonalitiesDTO, ConversationContext } from '../types';
 import * as aiPatientService from '../services/aiPatient';
 import * as agentService from '../services/agent';
 import { prisma } from '../prisma/client';
 
 const router = Router();
+
+// Number of AI agent participants in each session
+const NUM_AI_AGENTS = 2;
 
 /**
  * POST /api/ai-patients/generate-response
@@ -13,12 +16,32 @@ const router = Router();
  */
 router.post('/generate-response', async (req: Request, res, next) => {
   try {
-    const { sessionId, agentId, conversationHistory, currentPhase } = req.body as GenerateAgentResponseDTO;
+    const requestBody = req.body as GenerateAgentResponseDTO;
+    const { sessionId, agentId, currentPhase } = requestBody;
+    const conversationHistoryFromBody = requestBody.conversationHistory;
+    const userReturnCounter = requestBody.userReturnCounter || 0;
+
+    console.log('[AI Patients] Request received:', {
+      sessionId,
+      agentId,
+      conversationHistoryType: typeof conversationHistoryFromBody,
+      conversationHistoryIsArray: Array.isArray(conversationHistoryFromBody),
+      conversationHistoryLength: Array.isArray(conversationHistoryFromBody) ? conversationHistoryFromBody.length : 'N/A',
+      currentPhase,
+      userReturnCounter
+    });
 
     // Validate required fields
-    if (!sessionId || !agentId || !conversationHistory || !currentPhase) {
+    if (!sessionId || !agentId || !conversationHistoryFromBody || !currentPhase) {
       return res.status(400).json({
         error: 'Missing required fields: sessionId, agentId, conversationHistory, currentPhase'
+      });
+    }
+
+    // Validate conversationHistory is an array
+    if (!Array.isArray(conversationHistoryFromBody)) {
+      return res.status(400).json({
+        error: 'conversationHistory must be an array'
       });
     }
 
@@ -48,30 +71,38 @@ router.post('/generate-response', async (req: Request, res, next) => {
     const memories = await agentService.getAgentMemories(agentId, sessionId);
     const relevantMemories = memories.slice(0, 5).map(m => m.content);
 
-    // Build conversation context
-    const context = {
-      sessionId,
+    // Build conversation context - use explicit property assignment to avoid TDZ issues
+    const context: ConversationContext = {
+      sessionId: sessionId,
       participantId: session.participantId,
       participant: session.participant,
       agents: session.participant.agents,
       topic: session.topic ?? undefined,
-      conversationHistory,
-      currentPhase
+      conversationHistory: conversationHistoryFromBody,
+      currentPhase: currentPhase
     };
 
     // Generate agent response
-    const content = await aiPatientService.generateAgentResponse(
+    const { content, returnToUser } = await aiPatientService.generateAgentResponse(
       agent,
       context,
-      relevantMemories
+      relevantMemories,
+      userReturnCounter
     );
+
+    console.log('[AI Patients] Agent response generated:', {
+      agentName: agent.name,
+      returnToUser,
+      contentPreview: content.substring(0, 80) + '...'
+    });
 
     // Return response
     res.json({
       data: {
         content,
         voiceId: agent.voiceId || 'default_voice',
-        agentName: agent.name
+        agentName: agent.name,
+        returnToUser
       }
     });
 
@@ -87,7 +118,7 @@ router.post('/generate-response', async (req: Request, res, next) => {
  */
 router.post('/generate-personalities', async (req: Request, res, next) => {
   try {
-    const { participantId, topic, count = 5, participantBackground } = req.body as GeneratePersonalitiesDTO;
+    const { participantId, topic, count = NUM_AI_AGENTS, participantBackground } = req.body as GeneratePersonalitiesDTO;
 
     // Validate required fields
     if (!participantId || !topic) {

@@ -6,6 +6,9 @@ import StreamingAvatar from '@heygen/streaming-avatar';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
+// Number of AI agent participants in each session
+const NUM_AI_AGENTS = 2;
+
 interface HeygenAvatarInstance {
   agentId: string;
   avatar: StreamingAvatar;
@@ -82,7 +85,7 @@ export const useNewConversationFlow = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ moderatorId, count: 5 }),
+        body: JSON.stringify({ moderatorId, count: NUM_AI_AGENTS }),
       });
 
       const elapsed2 = Date.now() - startTime2;
@@ -143,7 +146,7 @@ export const useNewConversationFlow = () => {
         sessionId,
         speakerType: 'moderator',
         speakerId: moderatorId,
-        speakerName: 'Guide',
+        speakerName: 'Maya',
         content: moderatorInitialMessage.text,
         sequenceNumber: 0,
         timestamp: new Date().toISOString(),
@@ -154,7 +157,7 @@ export const useNewConversationFlow = () => {
         sessionId,
         speakerType: 'moderator',
         speakerId: moderatorId,
-        speakerName: 'Guide',
+        speakerName: 'Maya',
         content: moderatorInitialMessage.text,
         sequenceNumber: 0,
         timestamp: new Date().toISOString(),

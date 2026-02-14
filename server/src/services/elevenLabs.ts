@@ -41,10 +41,11 @@ export const synthesizeSpeech = async (
       `${ELEVENLABS_API_URL}/text-to-speech/${elevenLabsVoiceId}`,
       {
         text,
-        model_id: 'eleven_turbo_v2_5',
+        model_id: 'eleven_turbo_v2',
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.75,
+          style: 1, // Enable conversational style (0-1, higher = more conversational)
         },
       },
       {

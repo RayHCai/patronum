@@ -13,6 +13,15 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 /**
  * Main conversation flow orchestration hook
  * Manages the entire client-side turn management system
+ *
+ * CACHE MANAGEMENT STRATEGY:
+ * - Text and audio are pre-computed for the next speaker while current audio plays
+ * - Caches are ONLY cleared when the user speaks (to invalidate stale pre-computed responses)
+ * - Caches are NOT cleared after AI speakers finish (to preserve pre-computed text)
+ * - This ensures:
+ *   1. Pre-computed text is used when valid (saving time)
+ *   2. Fresh text is generated after user input (ensuring context accuracy)
+ *   3. No repetition from using outdated cache entries
  */
 export const useConversationFlow = () => {
   const store = useConversationStore();
@@ -87,6 +96,12 @@ export const useConversationFlow = () => {
       console.log('[Conversation Flow] ========================================');
       console.log('[Conversation Flow] 🎯 EXECUTING AGENT TURN');
       console.log('[Conversation Flow] ========================================');
+      console.log('[Conversation Flow] enqueueAudio callback type:', typeof enqueueAudio);
+
+      if (!enqueueAudio) {
+        console.error('[Conversation Flow] ❌ CRITICAL: No enqueueAudio callback in executeAgentTurn');
+        throw new Error('enqueueAudio callback is required for executeAgentTurn');
+      }
 
       try {
         // Get fresh state from store to avoid stale closure issues
@@ -95,17 +110,19 @@ export const useConversationFlow = () => {
         console.log('[Conversation Flow] Current state:', {
           nextSpeakerIndex: nextIndex,
           totalSpeakers: freshState.speakerIndices.length,
-          turnCount: freshState.turns.length
+          turnCount: freshState.turns.length,
+          sessionId: freshState.sessionId
         });
 
         // Get speaker indices from fresh state
         const speakerIndices = freshState.speakerIndices;
+        console.log('[Conversation Flow] Looking for speaker at index', nextIndex, 'in', speakerIndices.length, 'total speakers');
         const speaker = speakerIndices.find(s => s.index === nextIndex);
 
         if (!speaker) {
           console.error('[Conversation Flow] ❌ No speaker found at index', nextIndex);
           console.error('[Conversation Flow] Available speakers:', speakerIndices.map(s => `${s.index}:${s.name}`).join(', '));
-          return;
+          throw new Error(`No speaker found at index ${nextIndex}`);
         }
 
         if (!speaker.voiceId) {
@@ -118,30 +135,93 @@ export const useConversationFlow = () => {
         // 1. Get text (from cache or fetch)
         console.log(`[Conversation Flow] 📝 Step 1: Getting text for ${speaker.name}`);
         let text = getCachedText(nextIndex);
+        let returnToUser: boolean | undefined = undefined;
+
         if (!text) {
           console.log(`[Conversation Flow] 🔍 Cache miss, requesting text from server for ${speaker.name}`);
           const startTime = Date.now();
-          text = await requestText(nextIndex);
+          const response = await requestText(nextIndex);
+          text = response.content;
+          returnToUser = response.returnToUser;
           const elapsed = Date.now() - startTime;
           console.log(`[Conversation Flow] ✅ Text generated in ${elapsed}ms:`, text.substring(0, 100) + '...');
+          if (returnToUser !== undefined) {
+            console.log(`[Conversation Flow] Server says returnToUser: ${returnToUser}`);
+          }
         } else {
           console.log(`[Conversation Flow] ✨ Cache hit! Using cached text for ${speaker.name}`);
           console.log(`[Conversation Flow] Cached text preview:`, text.substring(0, 100) + '...');
         }
 
-        // 2. Determine next speaker based on content
-        console.log(`[Conversation Flow] 🧭 Step 2: Determining next speaker based on content`);
-        // Special case: After moderator's opening (very first turn), always go to user
+        // 2. Determine next speaker based on server response or content
+        console.log(`[Conversation Flow] 🧭 Step 2: Determining next speaker`);
+
         let nextNextIndex: number;
-        if (nextIndex === 0 && store.turns.length === 0) {
-          // This is the moderator's opening - always go to user next
-          nextNextIndex = 1;
-          console.log(`[Conversation Flow] 🎤 Moderator's opening complete → routing to user (index 1)`);
-        } else {
-          // Normal turn - use speaker determination logic
-          console.log(`[Conversation Flow] 🎲 Running speaker determination logic...`);
+
+        // If server explicitly said to return to user (agent speaking)
+        if (returnToUser === true) {
+          nextNextIndex = 1; // User index
+          console.log(`[Conversation Flow] 🎯 Server says returnToUser=true → routing to user (index 1)`);
+          // Increment the user return counter
+          store.incrementUserReturnCounter();
+          console.log(`[Conversation Flow] User return counter incremented`);
+        } else if (returnToUser === false) {
+          // Server explicitly said NOT to return to user - don't route to user
+          console.log(`[Conversation Flow] 🚫 Server says returnToUser=false → will NOT route to user`);
+          // Reset the counter since we're not going to user
+          store.resetUserReturnCounter();
+          // Use speaker determination logic but skip user
           nextNextIndex = determineNextSpeaker(nextIndex, text);
+          // Make sure we don't accidentally route to user
+          if (nextNextIndex === 1) {
+            nextNextIndex = 2; // Go to first agent instead
+            console.log(`[Conversation Flow] Overriding user routing → going to first agent (index 2)`);
+          }
+        } else {
+          // No returnToUser flag (moderator or cached response) - use normal logic
+          console.log(`[Conversation Flow] No returnToUser flag - using normal speaker determination`);
+
+          // Check if any agent is mentioned by name (takes priority over "you/your" detection)
+          let agentMentioned = false;
+          if (nextIndex === 0 && text.includes('?')) {
+            // Check if moderator is addressing a specific agent
+            for (const s of speakerIndices) {
+              if (s.type === 'agent') {
+                const firstName = s.name.split(' ')[0].toLowerCase();
+                const contentLower = text.toLowerCase();
+                if (contentLower.includes(s.name.toLowerCase()) || contentLower.includes(firstName)) {
+                  console.log(`[Conversation Flow] 🎯 Agent "${s.name}" mentioned in moderator's question`);
+                  agentMentioned = true;
+                  break;
+                }
+              }
+            }
+          }
+
+          // Special case: When moderator asks a question to the user (and NOT to an agent)
+          if (nextIndex === 0 && text.includes('?') && !agentMentioned &&
+              (text.toLowerCase().includes('you') || text.toLowerCase().includes('your'))) {
+            // Moderator is asking the user a question - go to user
+            nextNextIndex = 1;
+            console.log(`[Conversation Flow] 🎤 Moderator asked user a question → routing to user (index 1)`);
+            // Increment counter since we're going to user
+            store.incrementUserReturnCounter();
+          } else {
+            // Normal turn - use speaker determination logic
+            console.log(`[Conversation Flow] 🎲 Running speaker determination logic...`);
+            nextNextIndex = determineNextSpeaker(nextIndex, text);
+
+            // If we're routing to user, increment counter; otherwise reset
+            if (nextNextIndex === 1) {
+              store.incrementUserReturnCounter();
+              console.log(`[Conversation Flow] Routing to user - counter incremented`);
+            } else {
+              store.resetUserReturnCounter();
+              console.log(`[Conversation Flow] Not routing to user - counter reset`);
+            }
+          }
         }
+
         store.setNextSpeakerIndex(nextNextIndex);
         const nextSpeaker = speakerIndices.find(s => s.index === nextNextIndex);
         console.log(`[Conversation Flow] ➡️ Next speaker will be: ${nextSpeaker?.name || 'Unknown'} (index ${nextNextIndex})`);
@@ -193,8 +273,24 @@ export const useConversationFlow = () => {
           touchStream(speaker.agentId);
 
           // Trigger HeyGen avatar to speak with lip-sync to audio
-          console.log(`[Conversation Flow] 🎬 Triggering HeyGen avatar speech for ${speaker.name}`);
-          avatarManager.speak(speaker.agentId, text, audioUrl).catch((err) => {
+          // Check if avatar is registered, and wait briefly if not
+          const maxWaitTime = 3000; // 3 seconds max wait
+          const startWaitTime = Date.now();
+          const waitForAvatar = async () => {
+            while (!avatarManager.has(speaker.agentId!) && (Date.now() - startWaitTime) < maxWaitTime) {
+              console.log(`[Conversation Flow] ⏳ Waiting for avatar ${speaker.name} to register...`);
+              await new Promise(resolve => setTimeout(resolve, 200)); // Wait 200ms
+            }
+
+            if (avatarManager.has(speaker.agentId!)) {
+              console.log(`[Conversation Flow] 🎬 Triggering HeyGen avatar speech for ${speaker.name}`);
+              await avatarManager.speak(speaker.agentId!, text, audioUrl);
+            } else {
+              console.warn(`[Conversation Flow] ⚠️ Avatar ${speaker.name} not ready after ${maxWaitTime}ms, skipping video speech`);
+            }
+          };
+
+          waitForAvatar().catch((err) => {
             console.error(`[Conversation Flow] ❌ Failed to trigger avatar speech:`, err);
           });
         }
@@ -204,6 +300,11 @@ export const useConversationFlow = () => {
         console.log(`[Conversation Flow] Audio URL:`, audioUrl.substring(0, 50) + '...');
         enqueueAudio(audioUrl, turnId.toString(), () => {
           console.log(`[Conversation Flow] ✅ Audio playback completed for ${speaker.name}`);
+
+          // NOTE: We do NOT clear the cache here because the next speaker's response
+          // may have been pre-computed while this audio was playing.
+          // The cache will be cleared when the user speaks (in handleUserTurn).
+          console.log(`[Conversation Flow] Cache NOT cleared - preserving pre-computed next turn`);
 
           // Check if this is the moderator's closing remarks
           const currentState = useConversationStore.getState();
@@ -227,14 +328,24 @@ export const useConversationFlow = () => {
         });
 
         // 6. Pre-compute next turn WHILE audio is playing (not after)
-        console.log(`[Conversation Flow] 🚀 Step 6: Starting background pre-computation while audio plays`);
-        preComputeNextTurn();
+        // Note: Only pre-compute if next speaker is not the user
+        const upcomingSpeaker = speakerIndices.find(s => s.index === nextNextIndex);
+        if (upcomingSpeaker && upcomingSpeaker.type !== 'user') {
+          console.log(`[Conversation Flow] 🚀 Step 6: Starting background pre-computation while audio plays`);
+          preComputeNextTurn();
+        } else {
+          console.log(`[Conversation Flow] ⏭️ Skipping pre-computation - next speaker is user`);
+        }
         console.log('[Conversation Flow] ========================================');
         console.log('[Conversation Flow] Turn execution initiated successfully');
         console.log('[Conversation Flow] ========================================');
       } catch (error) {
-        console.error('[Conversation Flow] Error executing agent turn:', error);
-        // TODO: Show error to user
+        console.error('[Conversation Flow] ========================================');
+        console.error('[Conversation Flow] ❌ ERROR EXECUTING AGENT TURN');
+        console.error('[Conversation Flow] ========================================');
+        console.error('[Conversation Flow] Error:', error);
+        console.error('[Conversation Flow] Stack:', error instanceof Error ? error.stack : 'No stack');
+        throw error; // Re-throw to be caught by handleUserTurn
       }
     },
     [
@@ -361,32 +472,20 @@ export const useConversationFlow = () => {
       console.log('[Conversation Flow] 🎤 HANDLING USER TURN');
       console.log('[Conversation Flow] ========================================');
       console.log(`[Conversation Flow] User transcript (${transcript.length} chars):`, transcript.substring(0, 150) + (transcript.length > 150 ? '...' : ''));
+      console.log('[Conversation Flow] enqueueAudio callback provided:', typeof enqueueAudio === 'function' ? 'YES' : 'NO');
+
+      if (!enqueueAudio) {
+        console.error('[Conversation Flow] ❌ CRITICAL: No enqueueAudio callback provided!');
+        throw new Error('enqueueAudio callback is required');
+      }
 
       try {
-        // IMPORTANT: Preserve cache for index 2 (first agent) because we pre-computed it during user speech
-        // The agent's response was generated based on the conversation flow, not necessarily directly responding to the user
-        // This is intentional for group therapy dynamics where agents continue conversation threads
-        console.log('[Conversation Flow] 🧹 Cache management: Preserving pre-computed text for agent at index 2, clearing others');
-
-        const index2Text = getCachedText(2);
-        if (index2Text) {
-          console.log('[Conversation Flow] ✅ Found pre-computed text for index 2:', index2Text.substring(0, 100) + '...');
-        } else {
-          console.log('[Conversation Flow] ⚠️ No pre-computed text found for index 2');
-        }
-
-        // Clear all text caches (will restore index 2 below)
-        console.log('[Conversation Flow] Clearing all text caches...');
+        // IMPORTANT: Clear ALL caches when user speaks to ensure agents respond to the latest context
+        // Pre-computed responses are outdated since they don't include what the user just said
+        console.log('[Conversation Flow] 🧹 Cache management: Clearing ALL caches to ensure fresh responses with user context');
         clearTextCache();
-
-        // Restore index 2's cached text
-        if (index2Text) {
-          store.cacheText(2, index2Text);
-          console.log('[Conversation Flow] ✅ Restored pre-computed text for index 2');
-        }
-
-        // Note: Audio cache is managed separately by useAudioFetcher's LRU cache and persists automatically
-        console.log('[Conversation Flow] ℹ️ Audio cache is managed by LRU and persists automatically');
+        clearAudioCache();
+        console.log('[Conversation Flow] ✅ All caches cleared - agents will generate fresh responses based on complete conversation including user\'s latest contribution');
 
         // Get fresh state
         const freshState = useConversationStore.getState();
@@ -437,7 +536,7 @@ export const useConversationFlow = () => {
         // Execute next turn
         console.log('[Conversation Flow] 🚀 Executing next agent turn...');
         console.log('[Conversation Flow] ========================================');
-        executeAgentTurn(enqueueAudio);
+        await executeAgentTurn(enqueueAudio);
       } catch (error) {
         console.error('[Conversation Flow] ========================================');
         console.error('[Conversation Flow] ❌ ERROR HANDLING USER TURN');
@@ -460,7 +559,8 @@ export const useConversationFlow = () => {
       participantId: string,
       participantName: string,
       topic?: string,
-      enqueueAudio?: (audioUrl: string, id: string, onComplete: () => void, turnData?: { speakerName: string; speakerType: string; content: string; speakerId?: string; avatarColor?: string }) => void
+      enqueueAudio?: (audioUrl: string, id: string, onComplete: () => void, turnData?: { speakerName: string; speakerType: string; content: string; speakerId?: string; avatarColor?: string }) => void,
+      onLoadingProgress?: (message: string) => void
     ) => {
       console.log('[Conversation Flow] ========================================');
       console.log('[Conversation Flow] 🎬 STARTING NEW SESSION');
@@ -495,6 +595,76 @@ export const useConversationFlow = () => {
       console.log('[Conversation Flow] 📊 Setting initial conversation phase...');
       store.updatePhase(0);
 
+      // Initialize all agent video streams at session start
+      console.log('[Conversation Flow] 🎥 Initializing video streams for all agents...');
+      // Filter agents that have BOTH an ID and a valid (non-empty) heygenAvatarId
+      const agentsWithVideo = agents.filter(agent => {
+        const hasValidConfig = agent.id &&
+                               agent.heygenAvatarId &&
+                               agent.heygenAvatarId.trim().length > 0;
+
+        if (agent.id && !hasValidConfig) {
+          console.log(`[Conversation Flow]   ⏭️ Skipping ${agent.name} - no valid HeyGen avatar ID`);
+        }
+
+        return hasValidConfig;
+      });
+
+      if (agentsWithVideo.length > 0) {
+        // Initialize all streams
+        onLoadingProgress?.('Connecting to video avatars...');
+        for (const agent of agentsWithVideo) {
+          console.log(`[Conversation Flow]   📹 Initializing video stream for ${agent.name} (${agent.id})`);
+          await initializeStream(agent.id);
+        }
+
+        // Wait for all avatars to be fully initialized (max 30 seconds)
+        console.log('[Conversation Flow] ⏳ Waiting for all avatars to fully initialize...');
+        onLoadingProgress?.('Loading avatars...');
+        const maxWaitTime = 30000; // 30 seconds
+        const startTime = Date.now();
+        const checkInterval = 500; // Check every 500ms
+
+        while (Date.now() - startTime < maxWaitTime) {
+          const currentState = useConversationStore.getState();
+          const allInitialized = agentsWithVideo.every(agent =>
+            currentState.videoInitializedStates.get(agent.id) === true
+          );
+
+          if (allInitialized) {
+            console.log('[Conversation Flow] ✅ All avatars fully initialized!');
+            onLoadingProgress?.('All avatars ready!');
+            break;
+          }
+
+          const initializedCount = agentsWithVideo.filter(agent =>
+            currentState.videoInitializedStates.get(agent.id) === true
+          ).length;
+
+          console.log(`[Conversation Flow]   Progress: ${initializedCount}/${agentsWithVideo.length} avatars ready`);
+          onLoadingProgress?.(`Loading avatars: ${initializedCount}/${agentsWithVideo.length}`);
+          await new Promise(resolve => setTimeout(resolve, checkInterval));
+        }
+
+        // Check if we timed out
+        const finalState = useConversationStore.getState();
+        const finalInitializedCount = agentsWithVideo.filter(agent =>
+          finalState.videoInitializedStates.get(agent.id) === true
+        ).length;
+
+        if (finalInitializedCount < agentsWithVideo.length) {
+          console.warn(`[Conversation Flow] ⚠️ Timeout: Only ${finalInitializedCount}/${agentsWithVideo.length} avatars initialized`);
+          const uninitialized = agentsWithVideo.filter(agent =>
+            !finalState.videoInitializedStates.get(agent.id)
+          );
+          console.warn('[Conversation Flow] Uninitialized avatars:', uninitialized.map(a => a.name).join(', '));
+        }
+      } else {
+        console.log('[Conversation Flow] ⏭️ No agents with video avatars configured');
+      }
+
+      onLoadingProgress?.('Starting conversation...');
+
       // Get fresh state to verify initialization
       const freshState = useConversationStore.getState();
       console.log('[Conversation Flow] ✅ Session initialized successfully!');
@@ -515,18 +685,7 @@ export const useConversationFlow = () => {
         console.warn('[Conversation Flow] ⚠️ No enqueueAudio callback provided, turn will not execute');
       }
     },
-    [store, clearTextCache, clearAudioCache, executeAgentTurn]
-  );
-
-  /**
-   * Skip to next speaker (manual skip)
-   */
-  const skipToNextSpeaker = useCallback(
-    (enqueueAudio: (audioUrl: string, id: string, onComplete: () => void, turnData?: { speakerName: string; speakerType: string; content: string; speakerId?: string; avatarColor?: string }) => void) => {
-      console.log('[Conversation Flow] Skipping current speaker');
-      moveToNextSpeaker(enqueueAudio);
-    },
-    [moveToNextSpeaker]
+    [store, clearTextCache, clearAudioCache, executeAgentTurn, initializeStream]
   );
 
   /**
@@ -546,7 +705,6 @@ export const useConversationFlow = () => {
   return {
     startSession,
     handleUserTurn,
-    skipToNextSpeaker,
     endSession,
     preComputeNextTurn,
     startPreComputingDuringUserSpeech,

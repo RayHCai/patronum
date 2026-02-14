@@ -245,6 +245,7 @@ export interface GenerateAgentResponseDTO {
   agentId: string;
   conversationHistory: TurnData[];
   currentPhase: ConversationPhase;
+  userReturnCounter?: number; // Number of times user has been returned to before moderator/agents
 }
 
 export interface GeneratePersonalitiesDTO {

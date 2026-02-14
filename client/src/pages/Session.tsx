@@ -1,7 +1,7 @@
 // Session page - Voice-only conversation interface (MOST CRITICAL PAGE)
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, SkipForward } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useConversationStore } from '../stores/conversationStore';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useAudioPlayback } from '../hooks/useAudioPlayback';
@@ -39,12 +39,13 @@ export default function Session() {
     clearGameState,
   } = useConversationStore();
   const { isConnected, sendMessage, on, off } = useWebSocket();
-  const { enqueue: enqueueAudio, clear: clearAudio } = useAudioPlayback();
-  const { startSession, handleUserTurn, skipToNextSpeaker, startPreComputingDuringUserSpeech } = useConversationFlow();
+  const { enqueue: enqueueAudio } = useAudioPlayback();
+  const { startSession, handleUserTurn, startPreComputingDuringUserSpeech } = useConversationFlow();
 
   const [currentSpeakerId, setCurrentSpeakerId] = useState<string | null>(null);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [accumulatedTranscript, setAccumulatedTranscript] = useState(''); // Accumulate full turn transcript
+  const accumulatedTranscriptRef = useRef(''); // Ref to track accumulated transcript for closures
   const [isLoading, setIsLoading] = useState(true); // Start loading immediately
   const [loadingMessage, setLoadingMessage] = useState('Preparing your conversation...');
   const [currentSubtitle, setCurrentSubtitle] = useState<{
@@ -59,6 +60,7 @@ export default function Session() {
       console.log('[Session] Transcript chunk received:', text.substring(0, 50));
       setAccumulatedTranscript((prev) => {
         const newText = prev ? `${prev} ${text}` : text;
+        accumulatedTranscriptRef.current = newText; // Keep ref in sync
         setLiveTranscript(newText);
         return newText;
       });
@@ -67,8 +69,10 @@ export default function Session() {
       console.log('[Session] Speech recognition started (onSpeechStart)');
       setMicState('listening');
 
-      // Start pre-computing the next agent's response WHILE user is speaking
-      console.log('[Session] Starting pre-computation of next agent response during user speech');
+      // Pre-compute next agent response while user is speaking
+      // Note: This uses the conversation history up to NOW (before user speaks)
+      // It does NOT include what the user is currently saying
+      console.log('[Session] Starting pre-computation for next agent while user speaks');
       startPreComputingDuringUserSpeech();
     },
     onSpeechEnd: () => {
@@ -172,6 +176,11 @@ export default function Session() {
             setCurrentSubtitle(null);
             onComplete();
           });
+        },
+        (message: string) => {
+          // Update loading message during avatar initialization
+          console.log('[Session] Loading progress:', message);
+          setLoadingMessage(message);
         }
       );
     });
@@ -272,17 +281,57 @@ export default function Session() {
     console.log('[Session] ========================================');
     console.log('[Session] 🛑 USER STOPPED RECORDING');
     console.log('[Session] ========================================');
-    console.log('[Session] Transcript length:', accumulatedTranscript.length);
-    console.log('[Session] Transcript:', accumulatedTranscript.substring(0, 200) + (accumulatedTranscript.length > 200 ? '...' : ''));
     stopListening();
 
-    if (accumulatedTranscript.trim()) {
-      console.log('[Session] ✅ Transcript exists, showing confirmation screen');
-      setMicState('confirming');
-    } else {
-      console.log('[Session] ⚠️ No transcript captured, returning to your-turn');
-      setMicState('your-turn');
-    }
+    // Wait for speech recognition to finalize (speech recognition needs time to process final results)
+    // Check both accumulated transcript (final results) and interim transcript as fallback
+    setTimeout(() => {
+      const currentTranscript = accumulatedTranscriptRef.current;
+      const interimTranscript = transcript; // Interim results from useMicrophone
+      console.log('[Session] Checking transcripts before showing confirmation...');
+      console.log('[Session] Accumulated transcript length:', currentTranscript.length);
+      console.log('[Session] Interim transcript length:', interimTranscript.length);
+      console.log('[Session] Transcript preview (accumulated):', currentTranscript.substring(0, 100));
+      console.log('[Session] Transcript preview (interim):', interimTranscript.substring(0, 100));
+
+      // Use accumulated transcript if available, otherwise fall back to interim
+      const transcriptToUse = currentTranscript.trim() || interimTranscript.trim();
+
+      if (transcriptToUse.length > 0) {
+        // If we're using interim transcript, update the accumulated transcript
+        if (!currentTranscript.trim() && interimTranscript.trim()) {
+          console.log('[Session] ℹ️ Using interim transcript as fallback');
+          setAccumulatedTranscript(interimTranscript);
+          accumulatedTranscriptRef.current = interimTranscript;
+          setLiveTranscript(interimTranscript);
+        }
+        console.log('[Session] ✅ Transcript ready, showing confirmation screen');
+        setMicState('confirming');
+      } else {
+        console.log('[Session] ⚠️ Both transcripts empty after delay, retrying...');
+        // Try one more time with a longer delay
+        setTimeout(() => {
+          const retryAccumulated = accumulatedTranscriptRef.current;
+          const retryInterim = transcript;
+          const retryTranscriptToUse = retryAccumulated.trim() || retryInterim.trim();
+
+          if (retryTranscriptToUse.length > 0) {
+            // Update accumulated if using interim
+            if (!retryAccumulated.trim() && retryInterim.trim()) {
+              console.log('[Session] ℹ️ Using interim transcript as fallback (retry)');
+              setAccumulatedTranscript(retryInterim);
+              accumulatedTranscriptRef.current = retryInterim;
+              setLiveTranscript(retryInterim);
+            }
+            console.log('[Session] ✅ Transcript ready on retry, showing confirmation screen');
+            setMicState('confirming');
+          } else {
+            console.log('[Session] ❌ No transcript captured, returning to your-turn');
+            setMicState('your-turn');
+          }
+        }, 500);
+      }
+    }, 500);
   };
 
   // Handle returning to recording from confirmation state
@@ -307,6 +356,7 @@ export default function Session() {
       if (isNewTurn && accumulatedTranscript) {
         console.log('[Session] Starting new turn, clearing previous accumulated transcript');
         setAccumulatedTranscript('');
+        accumulatedTranscriptRef.current = '';
         setLiveTranscript('');
       }
     }
@@ -317,14 +367,24 @@ export default function Session() {
     console.log('[Session] ========================================');
     console.log('[Session] ✅ USER CONFIRMED TRANSCRIPT');
     console.log('[Session] ========================================');
+    console.log('[Session] Session ID:', sessionId || 'MISSING');
+    console.log('[Session] Transcript length:', accumulatedTranscript.length);
+    console.log('[Session] Transcript (first 200 chars):', accumulatedTranscript.substring(0, 200));
 
-    if (!sessionId || !accumulatedTranscript.trim()) {
-      console.error('[Session] ❌ Cannot submit - missing sessionId or transcript');
+    if (!sessionId) {
+      console.error('[Session] ❌ Cannot submit - missing sessionId');
+      alert('Session error: No session ID found. Please refresh the page.');
       return;
     }
 
-    console.log('[Session] Session ID:', sessionId);
-    console.log('[Session] Transcript length:', accumulatedTranscript.length);
+    if (!accumulatedTranscript.trim()) {
+      console.error('[Session] ❌ Cannot submit - transcript is empty');
+      console.error('[Session] Returning to recording...');
+      setMicState('your-turn');
+      return;
+    }
+
+    console.log('[Session] ✅ Validation passed, proceeding with submission');
     console.log('[Session] Full transcript:', accumulatedTranscript);
 
     // Stop any ongoing speech recognition immediately
@@ -337,6 +397,7 @@ export default function Session() {
     console.log('[Session] 🧹 Clearing transcript buffers');
     setLiveTranscript('');
     setAccumulatedTranscript('');
+    accumulatedTranscriptRef.current = '';
 
     // Set to processing while handling turn
     console.log('[Session] ⏳ Setting state to processing');
@@ -517,69 +578,6 @@ export default function Session() {
     sendMessage({ type: 'session_end', payload: { sessionId } });
   };
 
-  // Handle skip to next agent
-  const handleSkipTurn = () => {
-    console.log('[Session] ========================================');
-    console.log('[Session] ⏭️ USER SKIPPED TURN');
-    console.log('[Session] ========================================');
-
-    if (!sessionId) {
-      console.error('[Session] ❌ Cannot skip - no active session');
-      return;
-    }
-
-    console.log('[Session] Session ID:', sessionId);
-    console.log('[Session] Current speaker:', currentSpeakerId);
-
-    // Stop current audio playback
-    console.log('[Session] 🔇 Clearing audio playback');
-    clearAudio();
-
-    // Clear current subtitle and speaker
-    console.log('[Session] 🧹 Clearing subtitle and speaker state');
-    setCurrentSpeakerId(null);
-    setCurrentSubtitle(null);
-
-    // Set to idle while waiting for next agent
-    console.log('[Session] ⏸️ Setting state to idle');
-    setMicState('idle');
-
-    // Use conversation flow hook to skip (client-side management)
-    console.log('[Session] 🚀 Calling skipToNextSpeaker...');
-    skipToNextSpeaker((audioUrl, id, onComplete, turnData) => {
-      // Enqueue audio callback
-      console.log('[Session] Enqueueing audio after skip');
-      setMicState('speaking');
-
-      // Use turn data passed directly from the callback
-      if (turnData) {
-        const color =
-          turnData.speakerType === 'moderator'
-            ? '#065f46'
-            : turnData.avatarColor || '#8B5CF6';
-
-        setCurrentSubtitle({
-          speaker: turnData.speakerName,
-          color: color,
-          text: turnData.content,
-        });
-
-        if (turnData.speakerType === 'agent') {
-          setCurrentSpeakerId(turnData.speakerId || null);
-        } else if (turnData.speakerType === 'moderator') {
-          setCurrentSpeakerId('moderator');
-        }
-      }
-
-      enqueueAudio(audioUrl, id, () => {
-        console.log('[Session] Audio finished after skip');
-        setCurrentSpeakerId(null);
-        setCurrentSubtitle(null);
-        onComplete();
-      });
-    });
-  };
-
   // Loading screen
   if (isLoading) {
     return (
@@ -650,19 +648,6 @@ export default function Session() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Skip button - show when agent or moderator is speaking */}
-          {(micState === 'speaking' || currentSpeakerId) && (
-            <button
-              onClick={handleSkipTurn}
-              className="flex items-center gap-2 px-6 py-3 text-[15px] font-medium text-[var(--color-text-secondary)] border-2 border-[var(--color-border-hover)] rounded-md hover:border-[var(--color-text-primary)] transition-colors"
-              style={{ fontFamily: 'var(--font-sans)' }}
-              title="Skip to next speaker"
-            >
-              <SkipForward size={20} />
-              Skip Turn
-            </button>
-          )}
-
           <button
             onClick={handleEndConversation}
             className="flex items-center gap-2 px-6 py-3 text-[15px] font-semibold text-white bg-[var(--color-accent)] rounded-md hover:shadow-lg transition-shadow"
@@ -675,14 +660,14 @@ export default function Session() {
       </div>
 
       {/* Main Content - Video Avatar Grid */}
-      <div className="relative z-10 flex-1 p-6 overflow-visible">
+      <div className="relative z-10 flex-1 overflow-hidden">
         <VideoAvatarGrid
           agents={agents}
           participantName={participant.name || 'You'}
           currentSpeakerId={currentSpeakerId}
           moderator={{
             id: 'moderator',
-            name: 'Guide',
+            name: 'Maya',
             color: '#065f46',
           }}
         />
