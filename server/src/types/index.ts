@@ -91,6 +91,7 @@ export interface SessionSummary {
 export type WSMessageType =
   | 'auth'
   | 'session_start'
+  | 'conversation_end'
   | 'session_end'
   | 'error'
   | 'state_change'; // Kept for backward compatibility

@@ -40,7 +40,7 @@ export default function Session() {
   } = useConversationStore();
   const { isConnected, sendMessage, on, off } = useWebSocket();
   const { enqueue: enqueueAudio } = useAudioPlayback();
-  const { startSession, handleUserTurn, startPreComputingDuringUserSpeech } = useConversationFlow();
+  const { startSession, handleUserTurn, startPreComputingDuringUserSpeech, endSession } = useConversationFlow();
 
   const [currentSpeakerId, setCurrentSpeakerId] = useState<string | null>(null);
   const [liveTranscript, setLiveTranscript] = useState('');
@@ -459,18 +459,28 @@ export default function Session() {
     console.log('[Session] ========================================');
     console.log('[Session] Session ID:', sessionId);
 
+    // 1. Clear caches and cleanup
+    console.log('[Session] 🧹 Clearing caches and cleaning up conversation state');
+    endSession();
+
+    // 2. Notify server that conversation phase is ending (session continues for game)
     if (sessionId) {
-      console.log('[Session] 📤 Sending session_end message to server');
+      console.log('[Session] 📤 Sending conversation_end notification to server');
       sendMessage({
-        type: 'session_end',
-        payload: { sessionId },
+        type: 'conversation_end',
+        payload: {
+          sessionId,
+          turnCount: turns.length,
+          participantId: participant.id,
+        },
       });
     } else {
       console.warn('[Session] ⚠️ No session ID, skipping server notification');
     }
 
-    console.log('[Session] 🚀 Navigating to thank you page');
-    navigate(`/patient/${participantId}/thank-you`);
+    // 3. Show game choice screen
+    console.log('[Session] 🎮 Showing game choice screen');
+    setShowGameChoice(true);
   };
 
   // === Cognitive Game Handlers ===

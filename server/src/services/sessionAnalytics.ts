@@ -2,6 +2,8 @@
 // Performs sentiment analysis and conversation summarization for completed sessions
 import { anthropic, stripMarkdownCodeFences } from './claude';
 import { TurnData } from '../types';
+import { prisma } from '../prisma/client';
+import { NotFoundError } from '../types';
 
 // ========================================
 // Dementia-Focused Sentiment Analysis
@@ -258,4 +260,206 @@ Keep the summary positive and person-centered, focusing on what ${participantNam
     const participantTurns = allTurns.filter(t => t.speakerType === 'participant');
     return `${participantName} participated in a group conversation with ${allTurns.length} total exchanges. They contributed ${participantTurns.length} times. Summary generation unavailable.`;
   }
+};
+
+// ========================================
+// Basic Analytics Calculations
+// ========================================
+
+/**
+ * Calculate basic conversation metrics
+ */
+export const calculateBasicAnalytics = (
+  allTurns: TurnData[],
+  participantTurns: TurnData[]
+) => {
+  const totalTurns = allTurns.length;
+  const participantTurnCount = participantTurns.length;
+  const avgTurnLength = participantTurns.length > 0
+    ? participantTurns.reduce((sum, turn) => sum + turn.content.split(/\s+/).length, 0) / participantTurns.length
+    : 0;
+
+  return {
+    totalTurns,
+    participantTurnCount,
+    avgTurnLength: Math.round(avgTurnLength * 10) / 10,
+  };
+};
+
+/**
+ * Analyze conversation for coherence indicators
+ */
+export const analyzeCoherence = (participantTurns: TurnData[]): {
+  coherenceScore: number;
+  topicShifts: number;
+  contextualContinuity: number;
+} => {
+  if (participantTurns.length === 0) {
+    return {
+      coherenceScore: 0,
+      topicShifts: 0,
+      contextualContinuity: 0,
+    };
+  }
+
+  // Simple heuristics for now - can be enhanced with AI analysis
+  const avgLength = participantTurns.reduce((sum, t) => sum + t.content.split(/\s+/).length, 0) / participantTurns.length;
+  const variability = Math.abs(avgLength - 10) / 10; // Normalize around 10 words
+
+  return {
+    coherenceScore: Math.max(0, Math.min(1, 1 - variability)),
+    topicShifts: 0, // Placeholder for future implementation
+    contextualContinuity: participantTurns.length > 1 ? 0.7 : 0.5, // Placeholder
+  };
+};
+
+/**
+ * Detect repetition patterns in participant speech
+ */
+export const analyzeRepetition = (participantTurns: TurnData[]): {
+  repetitionScore: number;
+  repeatedPhrases: string[];
+  repeatedWords: string[];
+} => {
+  if (participantTurns.length === 0) {
+    return {
+      repetitionScore: 0,
+      repeatedPhrases: [],
+      repeatedWords: [],
+    };
+  }
+
+  const allWords = participantTurns
+    .flatMap(turn => turn.content.toLowerCase().split(/\s+/))
+    .filter(word => word.length > 3); // Ignore short words
+
+  const wordCounts = new Map<string, number>();
+  allWords.forEach(word => {
+    wordCounts.set(word, (wordCounts.get(word) || 0) + 1);
+  });
+
+  const repeatedWords = Array.from(wordCounts.entries())
+    .filter(([_, count]) => count > 2)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([word]) => word);
+
+  const repetitionScore = repeatedWords.length > 0
+    ? Math.min(1, repeatedWords.length / 10)
+    : 0;
+
+  return {
+    repetitionScore,
+    repeatedPhrases: [], // Placeholder for phrase detection
+    repeatedWords,
+  };
+};
+
+// ========================================
+// Complete Session Analysis Orchestration
+// ========================================
+
+export interface SessionAnalysisResult {
+  summary: string;
+  sentimentAnalysis: DementiaSentimentAnalysis;
+  analytics: {
+    totalTurns: number;
+    participantTurnCount: number;
+    avgTurnLength: number;
+  };
+  coherenceMetrics: {
+    coherenceScore: number;
+    topicShifts: number;
+    contextualContinuity: number;
+  };
+  repetitionMetrics: {
+    repetitionScore: number;
+    repeatedPhrases: string[];
+    repeatedWords: string[];
+  };
+}
+
+/**
+ * Complete analysis orchestration for session completion
+ * Handles all analysis logic: sentiment, summary, coherence, repetition, basic metrics
+ */
+export const completeSessionAnalysis = async (
+  sessionId: string
+): Promise<SessionAnalysisResult> => {
+  console.log(`[Session Analysis] Starting complete analysis for session ${sessionId}`);
+
+  // 1. Fetch session with all required data
+  const session = await prisma.session.findUnique({
+    where: { id: sessionId },
+    include: {
+      participant: true,
+      turns: {
+        orderBy: { sequenceNumber: 'asc' },
+      },
+    },
+  });
+
+  if (!session) {
+    throw new NotFoundError('Session');
+  }
+
+  console.log(`[Session Analysis] Processing session with ${session.turns.length} turns`);
+
+  // 2. Prepare turn data
+  const allTurns = session.turns.map(turn => ({
+    speakerName: turn.speakerName,
+    speakerType: turn.speakerType,
+    speakerId: turn.speakerId || undefined,
+    content: turn.content,
+    audioUrl: turn.audioUrl || undefined,
+  }));
+
+  const participantTurns = allTurns.filter(turn => turn.speakerType === 'participant');
+  console.log(`[Session Analysis] Found ${participantTurns.length} participant turns for analysis`);
+
+  // 3. Perform all analyses in parallel where possible
+  const [sentimentAnalysis, conversationSummary, coherenceMetrics, repetitionMetrics] = await Promise.all([
+    analyzeParticipantSentiment(participantTurns, session.participant.name),
+    generateConversationSummary(allTurns, session.participant.name),
+    Promise.resolve(analyzeCoherence(participantTurns)),
+    Promise.resolve(analyzeRepetition(participantTurns)),
+  ]);
+
+  console.log(`[Session Analysis] Sentiment: ${sentimentAnalysis.overallSentiment}, Coherence: ${coherenceMetrics.coherenceScore.toFixed(2)}`);
+
+  // 4. Calculate basic analytics
+  const analytics = calculateBasicAnalytics(allTurns, participantTurns);
+
+  // 5. Update session record
+  await prisma.session.update({
+    where: { id: sessionId },
+    data: {
+      status: 'completed',
+      endedAt: new Date(),
+      aiSummary: conversationSummary,
+    },
+  });
+
+  // 6. Create session analytics record
+  await prisma.sessionAnalytics.create({
+    data: {
+      sessionId,
+      participantId: session.participantId,
+      turnCount: analytics.totalTurns,
+      participantTurnCount: analytics.participantTurnCount,
+      avgTurnLength: analytics.avgTurnLength,
+      sentimentAnalysis: sentimentAnalysis as any,
+      computedAt: new Date(),
+    },
+  });
+
+  console.log(`[Session Analysis] Session ${sessionId} marked as complete with full analytics`);
+
+  return {
+    summary: conversationSummary,
+    sentimentAnalysis,
+    analytics,
+    coherenceMetrics,
+    repetitionMetrics,
+  };
 };

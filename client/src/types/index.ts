@@ -118,7 +118,7 @@ export interface Session {
   endedAt?: string;
   turns?: Turn[];
   reinforcementItems?: ReinforcementItem[];
-  analytics?: SessionAnalytics;
+  sessionAnalytics?: SessionAnalytics[];
 }
 
 export interface Turn {
@@ -172,6 +172,7 @@ export interface WebSocketMessage {
 export type WSMessageType =
   | 'auth'
   | 'session_start'
+  | 'conversation_end'
   | 'session_end'
   | 'turn_start'
   | 'turn_end'
