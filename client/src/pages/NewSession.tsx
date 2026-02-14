@@ -397,7 +397,7 @@ export default function NewSession() {
           currentSpeakerId={currentSpeakerId}
           moderator={{
             id: 'moderator',
-            name: 'Guide',
+            name: 'Maya',
             color: '#065f46',
           }}
         />

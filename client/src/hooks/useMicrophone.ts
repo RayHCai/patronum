@@ -15,6 +15,7 @@ export const useMicrophone = (options: UseMicrophoneOptions = {}) => {
 
   const recognitionRef = useRef<any>(null);
   const callbacksRef = useRef(options);
+  const lastTranscriptRef = useRef<string>(''); // Track last transcript (interim or final)
 
   // Update callbacks ref when options change
   useEffect(() => {
@@ -54,16 +55,30 @@ export const useMicrophone = (options: UseMicrophoneOptions = {}) => {
           }
         }
 
-        setTranscript(finalTranscript || interimTranscript);
+        const currentTranscript = finalTranscript || interimTranscript;
+        setTranscript(currentTranscript);
+        lastTranscriptRef.current = currentTranscript; // Always save the latest transcript
 
-        if (finalTranscript && callbacksRef.current.onTranscript) {
-          callbacksRef.current.onTranscript(finalTranscript);
+        if (finalTranscript) {
+          console.log('[useMicrophone] 📝 Final transcript chunk:', finalTranscript.substring(0, 100));
+          if (callbacksRef.current.onTranscript) {
+            callbacksRef.current.onTranscript(finalTranscript);
+          }
         }
       };
 
       recognition.onend = () => {
-        console.log('Speech recognition ended');
+        console.log('[useMicrophone] Speech recognition ended');
+
+        // If we have a transcript that wasn't finalized, send it now
+        if (lastTranscriptRef.current && callbacksRef.current.onTranscript) {
+          console.log('[useMicrophone] 📤 Sending last captured transcript on end:', lastTranscriptRef.current.substring(0, 100));
+          callbacksRef.current.onTranscript(lastTranscriptRef.current);
+        }
+
         setIsListening(false);
+        lastTranscriptRef.current = ''; // Clear for next time
+
         if (callbacksRef.current.onSpeechEnd) {
           callbacksRef.current.onSpeechEnd();
         }
@@ -96,6 +111,7 @@ export const useMicrophone = (options: UseMicrophoneOptions = {}) => {
     if (recognitionRef.current && !isListening) {
       setTranscript('');
       setError(null);
+      lastTranscriptRef.current = ''; // Clear previous transcript
       try {
         recognitionRef.current.start();
       } catch (err: any) {
@@ -109,9 +125,8 @@ export const useMicrophone = (options: UseMicrophoneOptions = {}) => {
   const stopListening = useCallback(() => {
     if (recognitionRef.current && isListening) {
       try {
-        recognitionRef.current.abort(); // Use abort for immediate stop
-        setIsListening(false);
-        console.log('[useMicrophone] Stopped speech recognition');
+        recognitionRef.current.stop(); // Use stop() to allow final transcript processing
+        console.log('[useMicrophone] Stopped speech recognition (will process final results)');
       } catch (err) {
         console.error('[useMicrophone] Error stopping recognition:', err);
       }

@@ -8,6 +8,9 @@ import { getHeygenService } from '../services/heygen';
 
 const router = Router();
 
+// Number of AI agent participants in each session
+const NUM_AI_AGENTS = 2;
+
 /**
  * POST /api/sessions/initialize
  * Initialize a new conversation session
@@ -115,7 +118,7 @@ router.post('/initialize', async (req: Request, res, next) => {
  *
  * Request body:
  * - moderatorId: string
- * - count?: number (default 5)
+ * - count?: number (default 2)
  *
  * Response:
  * - agents: Agent[] (with id, name, age, background, personality, voiceId, avatarColor, heygenAvatarId)
@@ -123,7 +126,14 @@ router.post('/initialize', async (req: Request, res, next) => {
 router.post('/:id/generate-agents', async (req: Request, res, next) => {
   try {
     const sessionId = req.params.id;
-    const { moderatorId, count = 5 } = req.body;
+    const { moderatorId, count = NUM_AI_AGENTS } = req.body;
+
+    console.log('[Agent Gen] ==========================================');
+    console.log('[Agent Gen] RECEIVED REQUEST TO GENERATE AGENTS');
+    console.log('[Agent Gen] ==========================================');
+    console.log('[Agent Gen] Request body count:', req.body.count);
+    console.log('[Agent Gen] Final count value:', count);
+    console.log('[Agent Gen] NUM_AI_AGENTS constant:', NUM_AI_AGENTS);
 
     // Validate input
     if (!moderatorId || typeof moderatorId !== 'string') {
@@ -167,8 +177,19 @@ router.post('/:id/generate-agents', async (req: Request, res, next) => {
       count
     );
 
+    console.log('[Agent Gen] ==========================================');
+    console.log('[Agent Gen] PERSONALITIES GENERATION RESULT');
+    console.log('[Agent Gen] ==========================================');
+    console.log('[Agent Gen] Requested count:', count);
+    console.log('[Agent Gen] Received personalities:', personalities.length);
+    console.log('[Agent Gen] Personality names:', personalities.map(p => p.name).join(', '));
+
     if (personalities.length === 0) {
       throw new Error('Failed to generate agent personalities');
+    }
+
+    if (personalities.length !== count) {
+      console.warn(`[Agent Gen] ⚠️ WARNING: Requested ${count} agents but got ${personalities.length}!`);
     }
 
     console.log(`[Agent Gen] Generated ${personalities.length} personalities`);
@@ -244,6 +265,11 @@ router.post('/:id/generate-agents', async (req: Request, res, next) => {
     }
 
     console.log(`[Agent Gen] Successfully created ${agents.length} agents for session ${sessionId}`);
+    console.log('[Agent Gen] ==========================================');
+    console.log('[Agent Gen] RETURNING AGENTS TO CLIENT');
+    console.log('[Agent Gen] ==========================================');
+    console.log('[Agent Gen] Agent count being returned:', agents.length);
+    console.log('[Agent Gen] Agent names:', agents.map(a => a.name).join(', '));
 
     // Update session status to 'active'
     await prisma.session.update({

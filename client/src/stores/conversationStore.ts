@@ -70,6 +70,7 @@ interface ConversationState {
   userTurnsInLastFive: number;
   turnsSinceModeratorSpoke: number;
   lastFiveTurnSpeakers: ('user' | 'agent' | 'moderator')[]; // Sliding window
+  userReturnCounter: number; // Number of times user has been returned to before moderator/agents
 
   // Text generation cache
   textCache: Map<number, string>; // speakerIndex → cached text
@@ -94,6 +95,7 @@ interface ConversationState {
   activeVideoStreams: Set<string>; // Agent IDs with active streams
   videoLoadingStates: Map<string, boolean>; // Agent ID → loading state
   videoErrors: Map<string, Error>; // Agent ID → error
+  videoInitializedStates: Map<string, boolean>; // Agent ID → fully initialized state
 
   // === Actions ===
 
@@ -128,6 +130,8 @@ interface ConversationState {
   getCachedText: (index: number) => string | null;
   cacheText: (index: number, text: string) => void;
   clearTextCache: () => void;
+  incrementUserReturnCounter: () => void;
+  resetUserReturnCounter: () => void;
 
   // Cognitive game actions
   setShowGameChoice: (show: boolean) => void;
@@ -144,6 +148,7 @@ interface ConversationState {
   destroyAvatarVideo: (agentId: string) => void;
   setVideoLoading: (agentId: string, loading: boolean) => void;
   setVideoError: (agentId: string, error: Error | null) => void;
+  setVideoInitialized: (agentId: string, initialized: boolean) => void;
   clearVideoState: () => void;
 }
 
@@ -175,6 +180,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   userTurnsInLastFive: 0,
   turnsSinceModeratorSpoke: 0,
   lastFiveTurnSpeakers: [],
+  userReturnCounter: 0,
 
   // Text cache
   textCache: new Map(),
@@ -199,6 +205,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   activeVideoStreams: new Set(),
   videoLoadingStates: new Map(),
   videoErrors: new Map(),
+  videoInitializedStates: new Map(),
 
   // === Original Actions (kept for compatibility) ===
 
@@ -290,7 +297,12 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       userTurnsInLastFive: 0,
       turnsSinceModeratorSpoke: 0,
       lastFiveTurnSpeakers: [],
+      userReturnCounter: 0,
       textCache: new Map(),
+      activeVideoStreams: new Set(),
+      videoLoadingStates: new Map(),
+      videoErrors: new Map(),
+      videoInitializedStates: new Map(),
     });
   },
 
@@ -321,7 +333,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       {
         index: 0,
         type: 'moderator',
-        name: 'Guide',
+        name: 'Maya',
         speakerId: finalModeratorId,  // Store moderator ID
         voiceId: 'guide-voice', // Default moderator voice
       },
@@ -372,6 +384,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       userTurnsInLastFive: 0,
       turnsSinceModeratorSpoke: 0,
       lastFiveTurnSpeakers: [],
+      userReturnCounter: 0,
     });
 
     console.log('[ConversationStore] ✅ Speakers initialized successfully');
@@ -542,6 +555,17 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     set({ textCache: new Map() });
   },
 
+  incrementUserReturnCounter: () => {
+    const newCount = get().userReturnCounter + 1;
+    console.log('[ConversationStore] Incrementing user return counter:', newCount);
+    set({ userReturnCounter: newCount });
+  },
+
+  resetUserReturnCounter: () => {
+    console.log('[ConversationStore] Resetting user return counter to 0');
+    set({ userReturnCounter: 0 });
+  },
+
   // === Cognitive Game Actions ===
 
   setShowGameChoice: (show) => {
@@ -646,9 +670,17 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     return { videoErrors: newErrors };
   }),
 
+  setVideoInitialized: (agentId, initialized) => set((state) => {
+    const newInitializedStates = new Map(state.videoInitializedStates);
+    newInitializedStates.set(agentId, initialized);
+    console.log(`[Store] Avatar ${agentId} initialized state: ${initialized}`);
+    return { videoInitializedStates: newInitializedStates };
+  }),
+
   clearVideoState: () => set({
     activeVideoStreams: new Set(),
     videoLoadingStates: new Map(),
     videoErrors: new Map(),
+    videoInitializedStates: new Map(),
   }),
 }));

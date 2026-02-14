@@ -49,30 +49,25 @@ export class HeygenService {
   }
 
   /**
-   * Create a new avatar session for streaming
-   * Returns session token and WebRTC connection URL
+   * Create a new avatar session token for streaming
+   * Returns a session token that the frontend SDK can use to create sessions
+   * The avatar ID will be specified by the frontend SDK when creating the session
    */
-  async createAvatarSession(avatarId: string): Promise<HeygenSessionToken> {
+  async createAvatarSession(): Promise<HeygenSessionToken> {
     try {
-      const response = await this.client.post('/streaming.new', {
-        avatar_id: avatarId,
-        quality: 'medium', // low | medium | high
-        voice: {
-          provider: 'elevenlabs', // We'll use ElevenLabs for voice
-          rate: 1.0,
-        },
-      });
+      // First, create a session token that the frontend SDK will use
+      const response = await this.client.post('/streaming.create_token');
 
-      const { session_id, ice_servers, sdp } = response.data.data;
+      const { token } = response.data.data;
 
       return {
-        token: session_id,
-        url: sdp,
+        token: token,
+        url: '', // Not needed - SDK handles connection
         expiresAt: Date.now() + (30 * 60 * 1000), // 30 minutes
       };
-    } catch (error) {
-      console.error('[HeyGen] Failed to create avatar session:', error);
-      throw new Error('Failed to create HeyGen avatar session');
+    } catch (error: any) {
+      console.error('[HeyGen] Failed to create avatar session token:', error.response?.data || error.message);
+      throw new Error(`Failed to create HeyGen avatar session: ${error.response?.data?.message || error.message}`);
     }
   }
 

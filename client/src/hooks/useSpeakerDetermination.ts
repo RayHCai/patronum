@@ -115,17 +115,54 @@ export const useSpeakerDetermination = () => {
     }
 
     // RULE 7: Default - go to next agent in sequence (wrap around if needed)
-    // This ensures smooth conversation flow between agents
+    // Prefer agent-to-agent conversation during exploration/deepening phases
     console.log('[Speaker Determination] 🔄 RULE 7: Default sequential routing');
+
+    // Get current phase
+    const currentPhase = state.currentPhase;
+    const isAgentSpeaking = currentIndex >= 2; // Agent indices start at 2
+
+    // During exploration/deepening, prefer keeping conversation among agents
+    // Only route to moderator if agents have had 2-3 turns in a row
+    if (isAgentSpeaking && (currentPhase === 'exploration' || currentPhase === 'deepening')) {
+      // Count recent consecutive agent turns
+      const recentTurns = state.turns.slice(-3);
+      const consecutiveAgentTurns = recentTurns.filter(t => t.speakerType === 'agent').length;
+
+      console.log('[Speaker Determination]   Agent speaking in exploration/deepening phase');
+      console.log('[Speaker Determination]   Recent consecutive agent turns:', consecutiveAgentTurns);
+
+      // If agents have been talking for 2-3 turns, consider routing to moderator (50% chance)
+      if (consecutiveAgentTurns >= 2 && Math.random() < 0.5) {
+        console.log('[Speaker Determination]   Agents had multiple turns, routing to moderator for guidance');
+        return 0; // Go to moderator
+      }
+
+      // Otherwise, continue to next agent
+      let nextIndex = currentIndex + 1;
+      if (nextIndex > maxIndex) {
+        nextIndex = 2; // Wrap to first agent
+      }
+      if (nextIndex === 0 || nextIndex === 1) {
+        nextIndex = 2; // Skip moderator and user
+      }
+
+      const nextSpeaker = speakerIndices.find(s => s.index === nextIndex);
+      console.log(`[Speaker Determination] ✅ Agent-to-agent routing: ${currentIndex} → ${nextIndex} (${nextSpeaker?.name})`);
+      console.log('[Speaker Determination] ========================================');
+      return nextIndex;
+    }
+
+    // Default sequential routing for other cases
     let nextIndex = currentIndex + 1;
     if (nextIndex > maxIndex) {
-      console.log('[Speaker Determination]   Wrapping around to first agent');
-      nextIndex = 2; // Skip moderator (0) and user (1), go back to first agent
+      console.log('[Speaker Determination]   Wrapping around to start of sequence');
+      nextIndex = 0; // Wrap to moderator to restart the cycle
     }
-    if (nextIndex === 1) {
-      console.log('[Speaker Determination]   Skipping user, advancing to first agent');
-      nextIndex = 2; // Skip user, go to first agent
-    }
+
+    // Allow user to participate in natural sequential rotation
+    // User frequency is already controlled by RULE 2 (must speak once per 5 turns)
+    // and RULE 3 (max 3 times per 5 turns)
 
     const nextSpeaker = speakerIndices.find(s => s.index === nextIndex);
     console.log(`[Speaker Determination] ✅ Default routing: ${currentIndex} → ${nextIndex} (${nextSpeaker?.name})`);

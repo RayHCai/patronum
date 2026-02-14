@@ -17,10 +17,11 @@ const MODERATOR_SYSTEM_PROMPT = `You are a skilled conversation moderator facili
 4. Build on what's been shared to deepen the discussion
 5. Maintain focus on the chosen topic while allowing natural tangents
 6. Use simple, clear language - no medical or technical jargon
-7. Facilitate conversation between agents, not just with the main participant
+7. Facilitate conversation between agents - let them talk to each other, not just to you or the main participant
 8. Adapt your approach based on participant engagement levels
 9. Provide brief micro-affirmations after participant contributions
 10. Quickly pivot to comfort topics when distress is detected
+11. STEP BACK when agents are having a good conversation - don't interrupt unnecessarily
 
 Guidelines:
 - Keep questions and prompts brief (1-2 sentences max, even shorter when engagement is low)
@@ -33,10 +34,12 @@ Guidelines:
 - Reference earlier moments from the session naturally (without framing as "remembering")
 - Vary question depth: concrete questions for low engagement, reflective for high engagement
 - When rebalancing, redirect with curiosity: "I'd really love to hear what you think about that."
+- IMPORTANT: When agents are responding to each other naturally, let the conversation flow - don't jump in with a new prompt
+- Vary your contributions - don't always ask questions; sometimes affirm, bridge, or synthesize what's being shared
 - NEVER use action expressions like *smiles*, *chuckles*, *nods*, etc. - only speak dialogue
 - Speak naturally as if in a real conversation
 
-Remember: This is a friendly group chat with multiple voices. Adapt dynamically to keep everyone engaged and comfortable.`;
+Remember: This is a friendly group chat with multiple voices. Your job is to facilitate, not dominate. Let agents talk to each other naturally.`;
 
 // ========================================
 // Helper Functions
@@ -111,6 +114,16 @@ export const generateModeratorResponse = async (
 
   const participantName = participant.name.split(' ')[0];
 
+  // Extract what the moderator has already asked/said to avoid repetition
+  const moderatorPreviousContributions = conversationHistory
+    .filter(turn => turn.speakerType === 'moderator')
+    .slice(-3) // Last 3 moderator contributions
+    .map(turn => turn.content);
+
+  const moderatorRepetitionWarning = moderatorPreviousContributions.length > 0
+    ? `\n\nYour previous contributions as moderator (DO NOT REPEAT these questions/themes):\n${moderatorPreviousContributions.map((c, i) => `${i + 1}. "${c}"`).join('\n')}`
+    : '';
+
   // Get agent names for potential addressing
   const agentNames = agents.map(a => a.name);
 
@@ -141,10 +154,10 @@ Create a warm, personalized opening that:
 Make this opening special and tailored to this specific topic.`;
       break;
     case 'exploration':
-      phaseGuidance = `Exploring the topic. Ask open-ended questions that invite conversation.`;
+      phaseGuidance = `Exploring the topic. IMPORTANT: Review the recent conversation history below to see what questions have ALREADY been asked and answered. DO NOT repeat previous questions. Build on what was shared - ask new, different questions that take the conversation in a fresh direction or dig deeper into what was mentioned.`;
       break;
     case 'deepening':
-      phaseGuidance = `Deepening the discussion. Build on what's been shared. Help make connections between stories.`;
+      phaseGuidance = `Deepening the discussion. Build on what's been shared. Help make connections between stories. IMPORTANT: Don't repeat previous questions - reference what was already discussed and explore new angles.`;
       break;
     case 'synthesis':
       phaseGuidance = `Bringing threads together. Reflect on themes or connections that emerged in the conversation.`;
@@ -212,17 +225,17 @@ Example: "That's okay, ${participantName}. What comes to mind when you think abo
   if (sessionMemoryHooks.length > 0 && currentPhase !== 'opening') {
     const recentHooks = sessionMemoryHooks.slice(-3);
     const hookDescriptions = recentHooks.map(h => `- ${h.content} (${h.keywords.join(', ')})`).join('\n');
-    memoryHooksGuidance = `\n\nSESSION MEMORY: ${participantName} has shared these notable moments earlier in this session:\n${hookDescriptions}\n\nYou may naturally reference one of these if relevant, without framing it as "remembering" or testing.`;
+    memoryHooksGuidance = `\n\nSESSION CONTEXT: ${participantName} has shared these notable moments earlier:\n${hookDescriptions}\n\nYou may naturally reference these ONLY if highly relevant to the current discussion. DO NOT ask follow-up questions about these just for the sake of it - let the conversation flow naturally.`;
   }
 
   const userPrompt = `${phaseGuidance}
 
 Recent conversation:
-${recentHistory || '(Conversation just starting)'}${behavioralGuidance}${questionDepthGuidance}${addressingHint}${memoryHooksGuidance}
+${recentHistory || '(Conversation just starting)'}${moderatorRepetitionWarning}${behavioralGuidance}${questionDepthGuidance}${addressingHint}${memoryHooksGuidance}
 
 Participant engagement level: ${lastParticipantEngagement}
 
-What should you say next as the moderator? Keep it brief, warm, and natural. Follow any behavioral guidance above. Only provide the dialogue - no actions or expressions.`;
+What should you say next as the moderator? Keep it brief, warm, and natural. Follow any behavioral guidance above. Bring fresh questions/prompts - don't repeat what you've already asked. Only provide the dialogue - no actions or expressions.`;
 
   console.log(`[AI Moderator] Calling Claude API for moderator response (phase: ${currentPhase})...`);
   const message = await anthropic.messages.create({

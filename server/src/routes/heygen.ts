@@ -9,16 +9,8 @@ const router = express.Router();
  * POST /api/heygen/avatar/session
  * Create a new HeyGen avatar session for streaming
  */
-router.post('/avatar/session', async (req: Request, res: Response) => {
+router.post('/avatar/session', async (_req: Request, res: Response) => {
   try {
-    const { avatarId } = req.body;
-
-    if (!avatarId) {
-      return res.status(400).json({
-        error: 'Avatar ID is required',
-      });
-    }
-
     const heygenService = getHeygenService();
 
     if (!heygenService.isConfigured()) {
@@ -27,7 +19,9 @@ router.post('/avatar/session', async (req: Request, res: Response) => {
       });
     }
 
-    const session = await heygenService.createAvatarSession(avatarId);
+    // Create a session token that the frontend SDK will use
+    // The avatar ID will be specified by the frontend when calling createStartAvatar
+    const session = await heygenService.createAvatarSession();
 
     return res.json({
       success: true,
@@ -86,11 +80,9 @@ router.post('/moderator/session', async (req: Request, res: Response) => {
       });
     }
 
-    // For moderator, use a pre-configured avatar
-    // This could be stored in environment variables or config
-    const moderatorAvatarId = process.env.HEYGEN_MODERATOR_AVATAR_ID || 'default-moderator-avatar';
-
-    const session = await heygenService.createAvatarSession(moderatorAvatarId);
+    // Create a session token for the moderator
+    // The avatar ID will be specified by the frontend when calling createStartAvatar
+    const session = await heygenService.createAvatarSession();
 
     return res.json({
       success: true,

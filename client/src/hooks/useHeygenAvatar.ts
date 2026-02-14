@@ -62,15 +62,13 @@ export function useHeygenAvatar(options: UseHeygenAvatarOptions): UseHeygenAvata
     try {
       console.log(`[HeyGen Avatar ${agentId}] Initializing...`);
 
-      // 1. Create session token from backend
+      // 1. Get session token from backend
+      // This token authorizes the frontend SDK to create avatar sessions
       const response = await fetch(`${API_URL}/api/heygen/avatar/session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          avatarId: avatarId || heygenConfig?.avatarId,
-        }),
       });
 
       if (!response.ok) {

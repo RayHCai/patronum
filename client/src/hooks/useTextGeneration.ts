@@ -10,6 +10,7 @@ interface TextGenerationResponse {
   content: string;
   voiceId: string;
   speakerName: string;
+  returnToUser?: boolean; // Only present for agent responses
 }
 
 /**
@@ -25,15 +26,16 @@ export const useTextGeneration = () => {
     getCachedText,
     cacheText,
     clearTextCache,
+    userReturnCounter,
   } = useConversationStore();
 
   /**
    * Request text generation for a specific speaker
    * @param speakerIndex - Index of the speaker to generate text for
-   * @returns Generated text content
+   * @returns Object with generated text content and returnToUser flag (for agents)
    */
   const requestText = useCallback(
-    async (speakerIndex: number): Promise<string> => {
+    async (speakerIndex: number): Promise<{ content: string; returnToUser?: boolean }> => {
       console.log('[Text Generation] ========================================');
       console.log('[Text Generation] 📝 REQUESTING TEXT GENERATION');
       console.log('[Text Generation] ========================================');
@@ -83,14 +85,18 @@ export const useTextGeneration = () => {
           console.log('[Text Generation] 🎯 Using moderator endpoint');
         } else if (speaker.type === 'agent') {
           // Use AI Patients endpoint
+          // Get fresh userReturnCounter from store
+          const currentUserReturnCounter = useConversationStore.getState().userReturnCounter;
           endpoint = `${API_URL}/api/ai-patients/generate-response`;
           requestBody = {
             sessionId: currentSessionId,
             agentId: speaker.agentId,
             conversationHistory,
             currentPhase,
+            userReturnCounter: currentUserReturnCounter,
           };
           console.log('[Text Generation] 🤖 Using agent endpoint for agent:', speaker.agentId);
+          console.log('[Text Generation] User return counter:', currentUserReturnCounter);
         } else {
           console.error('[Text Generation] ❌ Cannot generate text for user speaker');
           throw new Error('Cannot generate text for user speaker');
@@ -130,11 +136,14 @@ export const useTextGeneration = () => {
         }, 3, 1000); // 3 retries, starting at 1 second
 
         const elapsed = Date.now() - startTime;
-        const { content } = response;
+        const { content, returnToUser } = response;
 
         console.log(`[Text Generation] ✅ Text generated successfully in ${elapsed}ms`);
         console.log(`[Text Generation] Content length: ${content.length} characters`);
         console.log(`[Text Generation] Content preview: "${content.substring(0, 150)}${content.length > 150 ? '...' : ''}"`);
+        if (returnToUser !== undefined) {
+          console.log(`[Text Generation] Return to user: ${returnToUser}`);
+        }
 
         // Cache the generated text
         console.log('[Text Generation] 💾 Caching generated text for index', speakerIndex);
@@ -142,7 +151,7 @@ export const useTextGeneration = () => {
 
         setIsLoading(false);
         console.log('[Text Generation] ========================================');
-        return content;
+        return { content, returnToUser };
       } catch (err) {
         const error = err as Error;
         console.error('[Text Generation] ========================================');
