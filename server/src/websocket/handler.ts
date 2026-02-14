@@ -3,6 +3,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { IncomingMessage } from 'http';
 import { WSMessage } from '../types';
 import { startConversationSession } from '../services/orchestrator';
+import { completeSessionAnalysis } from '../services/sessionAnalytics';
 
 interface AuthenticatedWebSocket extends WebSocket {
   isAlive?: boolean;
@@ -76,6 +77,10 @@ export class ConversationWebSocketHandler {
         await this.handleSessionStart(ws, payload);
         break;
 
+      case 'conversation_end':
+        await this.handleConversationEnd(ws, payload);
+        break;
+
       case 'session_end':
         await this.handleSessionEnd(ws, payload);
         break;
@@ -132,6 +137,42 @@ export class ConversationWebSocketHandler {
     }
   }
 
+  // Handle conversation end (conversation phase ending, marking session as complete)
+  private async handleConversationEnd(ws: AuthenticatedWebSocket, payload: any) {
+    try {
+      const { sessionId, turnCount, participantId } = payload;
+
+      console.log(`[WebSocket Handler] Conversation end request - sessionId: ${sessionId}`);
+      console.log(`[WebSocket Handler] Turn count: ${turnCount}, participantId: ${participantId}`);
+
+      if (!sessionId) {
+        console.log('[WebSocket Handler] Conversation end failed - no session ID');
+        return this.sendError(ws, 'Session ID required');
+      }
+
+      // Mark session as complete and run analytics
+      console.log(`[WebSocket Handler] Completing session ${sessionId} and running analytics...`);
+      try {
+        await completeSessionAnalysis(sessionId);
+        console.log(`[WebSocket Handler] Session ${sessionId} marked as complete with analytics`);
+      } catch (error: any) {
+        console.error(`[WebSocket Handler] Failed to complete session analysis:`, error);
+        // Continue anyway - we still want to send confirmation to client
+      }
+
+      // Send confirmation to client
+      this.sendMessage(ws, {
+        type: 'conversation_end',
+        payload: { sessionId },
+      });
+
+      console.log(`[WebSocket Handler] Conversation end acknowledged: ${sessionId}`);
+    } catch (error: any) {
+      console.error('[WebSocket Handler] Conversation end error:', error);
+      this.sendError(ws, error.message || 'Failed to end conversation');
+    }
+  }
+
   // Handle session end
   private async handleSessionEnd(ws: AuthenticatedWebSocket, payload: any) {
     try {
@@ -146,7 +187,6 @@ export class ConversationWebSocketHandler {
 
       // Clean up session
       if (this.sessions.has(sessionId)) {
-        const clientsCount = this.sessions.get(sessionId)!.size;
         this.sessions.get(sessionId)!.delete(ws);
         if (this.sessions.get(sessionId)!.size === 0) {
           this.sessions.delete(sessionId);

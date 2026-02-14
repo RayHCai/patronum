@@ -210,19 +210,8 @@ export default function NewSession() {
 
   // Handle end conversation
   const handleEndConversation = async () => {
-    if (sessionId) {
-      try {
-        await fetch(`${API_URL}/api/sessions/${sessionId}/complete`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-      } catch (error) {
-        console.error('[NewSession] Failed to complete session:', error);
-      }
-    }
-
+    // Session completion is now handled automatically by the WebSocket handler
+    // when the conversation_end message is sent
     navigate('/thank-you');
   };
 

@@ -1,23 +1,48 @@
 // Redesigned patient profile page with conversation analytics
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Settings, RefreshCw, BarChart3 } from 'lucide-react';
 import ReactFlow, {
   Background,
   Node,
   Edge,
   ConnectionMode,
+  MarkerType,
+  Position,
+  Handle,
+  NodeProps,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { Participant, Session, Turn, SessionAnalytics } from '../../types';
+import { Participant, Session, Turn } from '../../types';
 import axios from 'axios';
-import { formatDistanceToNow } from 'date-fns';
+
+// Custom circular node component with proper handles
+function CircularNode({ data }: NodeProps) {
+  return (
+    <div style={data.style}>
+      <Handle
+        type="target"
+        position={Position.Top}
+        style={{ background: 'transparent', border: 'none', top: 0 }}
+      />
+      <div>{data.label}</div>
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        style={{ background: 'transparent', border: 'none', bottom: 0 }}
+      />
+    </div>
+  );
+}
+
+const nodeTypes = {
+  circular: CircularNode,
+};
 
 interface SessionWithDetails extends Session {
   turns?: Turn[];
   participant?: Participant;
   agents?: any[];
-  analytics?: SessionAnalytics;
 }
 
 interface WeeklyMetrics {
@@ -37,19 +62,26 @@ export default function PatientProfile() {
   const [sessions, setSessions] = useState<SessionWithDetails[]>([]);
   const [selectedSession, setSelectedSession] = useState<SessionWithDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingSession, setIsLoadingSession] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isReanalyzing, setIsReanalyzing] = useState(false);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [weeklyMetrics, setWeeklyMetrics] = useState<WeeklyMetrics>({
     totalConversations: 0,
     avgDuration: 0,
-    sentimentBreakdown: { positive: 33, neutral: 33, monitor: 34 }
+    sentimentBreakdown: { positive: 0, neutral: 0, monitor: 0 }
   });
+
+  console.log('PatientProfile component rendered. ID:', id, 'isLoading:', isLoading);
 
   // Fetch patient data and sessions
   useEffect(() => {
     const fetchData = async () => {
       try {
+        console.log('Starting to load patient profile for ID:', id);
         setIsLoading(true);
+        const startTime = Date.now();
 
         // Fetch patient details
         const patientRes = await axios.get(`/api/participants/${id}`);
@@ -79,11 +111,17 @@ export default function PatientProfile() {
         // Calculate weekly metrics
         calculateWeeklyMetrics(sessionsData);
 
+        // Ensure minimum loading time of 800ms for better UX
+        const elapsedTime = Date.now() - startTime;
+        const remainingTime = Math.max(0, 800 - elapsedTime);
+
+        console.log('Data loaded in', elapsedTime, 'ms, waiting', remainingTime, 'ms more');
+        await new Promise(resolve => setTimeout(resolve, remainingTime));
+        console.log('Finished loading patient profile');
         setIsLoading(false);
       } catch (error) {
         console.error('Error fetching patient data:', error);
-        // Use mock data as fallback
-        loadMockData();
+        setIsLoading(false);
       }
     };
 
@@ -92,187 +130,63 @@ export default function PatientProfile() {
     }
   }, [id]);
 
-  const loadMockData = () => {
-    const mockPatient: Participant = {
-      id: id!,
-      name: 'Margaret',
-      notes: 'Enjoys talking about family and memories',
-      dateOfBirth: '1950-05-15',
-      isActive: true,
-      createdAt: '2024-01-15',
-      caregiver: {
-        name: 'Sarah (Caretaker)',
-        relationship: 'Caregiver',
-      },
-      agents: [{
-        id: '1',
-        participantId: id!,
-        name: 'Care Agent',
-        avatarColor: '#F4A7A7',
-        voiceId: 'voice1',
-        age: 68,
-        background: {},
-        personality: {},
-        createdAt: '2024-01-15',
-      }],
-    };
-
-    const mockSessions: SessionWithDetails[] = [
-      {
-        id: '1',
-        participantId: id!,
-        topic: 'Morning check-in',
-        status: 'completed',
-        startedAt: '2026-02-14T10:30:00Z',
-        endedAt: '2026-02-14T10:42:00Z',
-        aiSummary: 'Morning check-in. Margaret discussed her breakfast routine and shared memories about her grandchildren. Positive engagement throughout.',
-        analytics: {
-          id: 1,
-          sessionId: '1',
-          participantId: id!,
-          turnCount: 4,
-          participantTurnCount: 2,
-          avgTurnLength: 12,
-          sentimentAnalysis: {
-            overallSentiment: 'positive',
-            summary: 'Engaged and positive conversation'
-          },
-          computedAt: '2026-02-14T10:42:00Z'
-        },
-        turns: [
-          {
-            id: 1,
-            sessionId: '1',
-            speakerType: 'agent',
-            speakerName: 'Care Agent',
-            content: 'Good morning, Margaret! How are you feeling today?',
-            timestamp: '2026-02-14T10:30:00Z',
-            sequenceNumber: 1
-          },
-          {
-            id: 2,
-            sessionId: '1',
-            speakerType: 'participant',
-            speakerName: 'Margaret',
-            content: "I'm doing well, thank you. I had oatmeal for breakfast.",
-            timestamp: '2026-02-14T10:30:15Z',
-            sequenceNumber: 2
-          },
-          {
-            id: 3,
-            sessionId: '1',
-            speakerType: 'agent',
-            speakerName: 'Care Agent',
-            content: 'That sounds wonderful. Did you add anything special to it?',
-            timestamp: '2026-02-14T10:31:00Z',
-            sequenceNumber: 3
-          },
-          {
-            id: 4,
-            sessionId: '1',
-            speakerType: 'participant',
-            speakerName: 'Margaret',
-            content: 'Yes, some blueberries. My granddaughter loves blueberries too.',
-            timestamp: '2026-02-14T10:32:00Z',
-            sequenceNumber: 4
-          },
-        ]
-      },
-      {
-        id: '2',
-        participantId: id!,
-        topic: 'Afternoon wellness check',
-        status: 'completed',
-        startedAt: '2026-02-13T15:30:00Z',
-        endedAt: '2026-02-13T15:38:00Z',
-        aiSummary: 'Afternoon wellness check. Brief discussion about medication schedule. Sarah joined the conversation.',
-        analytics: {
-          id: 2,
-          sessionId: '2',
-          participantId: id!,
-          turnCount: 6,
-          participantTurnCount: 3,
-          avgTurnLength: 8,
-          sentimentAnalysis: {
-            overallSentiment: 'neutral',
-            summary: 'Brief but focused conversation'
-          },
-          computedAt: '2026-02-13T15:38:00Z'
-        },
-      },
-      {
-        id: '3',
-        participantId: id!,
-        topic: 'Extended conversation about family history',
-        status: 'completed',
-        startedAt: '2026-02-12T14:00:00Z',
-        endedAt: '2026-02-12T14:16:00Z',
-        aiSummary: 'Extended conversation about family history. Margaret showed some difficulty recalling specific details.',
-        analytics: {
-          id: 3,
-          sessionId: '3',
-          participantId: id!,
-          turnCount: 8,
-          participantTurnCount: 4,
-          avgTurnLength: 10,
-          sentimentAnalysis: {
-            overallSentiment: 'mixed',
-            summary: 'Some challenges with recall noted'
-          },
-          computedAt: '2026-02-12T14:16:00Z'
-        },
-      },
-    ];
-
-    setPatient(mockPatient);
-    setSessions(mockSessions);
-    setSelectedSession(mockSessions[0]);
-
-    if (mockSessions[0].turns) {
-      generateConversationFlow(mockSessions[0].turns);
-    }
-
-    calculateWeeklyMetrics(mockSessions);
-    setIsLoading(false);
-  };
-
   const generateConversationFlow = (turns: Turn[]) => {
     const flowNodes: Node[] = [];
     const flowEdges: Edge[] = [];
 
     // Create nodes for each turn
     turns.forEach((turn, index) => {
-      const isParticipant = turn.speakerType === 'participant';
-      const isAgent = turn.speakerType === 'agent';
-      const isCareGiver = turn.speakerName.includes('Caretaker');
+      const isUser = turn.speakerType === 'participant';
+      const isModerator = turn.speakerType === 'moderator';
+      const isPatientAgent = turn.speakerType === 'agent';
 
-      let color = '#94A3B8'; // default gray
-      if (isParticipant) color = '#DC2626'; // red for patient
-      if (isAgent) color = '#F4A7A7'; // pink for care agent
-      if (isCareGiver) color = '#E9D5FF'; // light purple for caretaker
+      // Stanford color scheme - using darker colors
+      let color = '#8C1515'; // Stanford Cardinal Red for user
+      let textColor = '#FFFFFF'; // white text
+
+      if (isPatientAgent) {
+        color = '#620000'; // Dark burgundy for AI patient agent
+        textColor = '#FFFFFF';
+      } else if (isModerator) {
+        color = '#2E5339'; // Stanford Palo Alto Green (dark green) for AI moderator
+        textColor = '#FFFFFF';
+      } else if (isUser) {
+        color = '#8C1515'; // Stanford Cardinal red for patient user
+        textColor = '#FFFFFF';
+      }
+
+      const bubbleSize = 85; // All bubbles same size
 
       flowNodes.push({
         id: `turn-${turn.id}`,
-        type: 'default',
+        type: 'circular',
         position: {
-          x: isParticipant ? 150 : (isAgent ? 350 : 550),
-          y: index * 100 + 50
+          x: isUser ? 150 : (isModerator ? 350 : 550),
+          y: index * 130 + 50
         },
         data: {
-          label: ''
-        },
-        style: {
-          background: color,
-          border: 'none',
-          borderRadius: '50%',
-          width: isParticipant ? 50 : (isAgent ? 40 : 35),
-          height: isParticipant ? 50 : (isAgent ? 40 : 35),
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '0px',
-          padding: 0,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          label: turn.speakerName,
+          style: {
+            background: color,
+            border: 'none',
+            borderRadius: '50%',
+            width: bubbleSize,
+            height: bubbleSize,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '13px',
+            fontFamily: 'var(--font-serif)',
+            fontWeight: '700',
+            color: textColor,
+            padding: '10px',
+            textAlign: 'center',
+            lineHeight: '1.2',
+            boxShadow: '0 3px 10px rgba(140, 21, 21, 0.25)',
+            wordWrap: 'break-word',
+            whiteSpace: 'normal',
+            textShadow: '0 1px 2px rgba(0, 0, 0, 0.2)',
+          }
         },
         draggable: false,
       });
@@ -286,6 +200,12 @@ export default function PatientProfile() {
           type: 'smoothstep',
           animated: false,
           style: { stroke: '#E5E7EB', strokeWidth: 2 },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: '#9CA3AF',
+            width: 20,
+            height: 20,
+          },
         });
       }
     });
@@ -320,8 +240,9 @@ export default function PatientProfile() {
     let negativeCnt = 0;
 
     for (const session of weekSessions) {
-      if (session.analytics?.sentimentAnalysis) {
-        const sentiment = (session.analytics.sentimentAnalysis as any)?.overallSentiment;
+      const analytics = session.sessionAnalytics?.[0];
+      if (analytics?.sentimentAnalysis) {
+        const sentiment = (analytics.sentimentAnalysis as any)?.overallSentiment;
         if (sentiment === 'positive') positiveCnt++;
         else if (sentiment === 'neutral') neutralCnt++;
         else if (sentiment === 'negative' || sentiment === 'mixed') negativeCnt++;
@@ -334,9 +255,9 @@ export default function PatientProfile() {
       neutral: Math.round((neutralCnt / total) * 100),
       monitor: Math.round((negativeCnt / total) * 100)
     } : {
-      positive: 33,
-      neutral: 33,
-      monitor: 34
+      positive: 0,
+      neutral: 0,
+      monitor: 0
     };
 
     setWeeklyMetrics({
@@ -347,6 +268,7 @@ export default function PatientProfile() {
   };
 
   const handleSessionSelect = async (session: SessionWithDetails) => {
+    setIsLoadingSession(true);
     setSelectedSession(session);
 
     // Fetch full session details if needed
@@ -361,9 +283,72 @@ export default function PatientProfile() {
         }
       } catch (error) {
         console.error('Error fetching session details:', error);
+      } finally {
+        setIsLoadingSession(false);
       }
     } else {
       generateConversationFlow(session.turns);
+      setIsLoadingSession(false);
+    }
+  };
+
+  const handleRefreshSessions = async () => {
+    try {
+      setIsRefreshing(true);
+
+      // Fetch sessions for this patient
+      const sessionsRes = await axios.get(`/api/participants/${id}/sessions`);
+      const sessionsData = sessionsRes.data.data || [];
+      setSessions(sessionsData);
+
+      // Recalculate weekly metrics with new data
+      calculateWeeklyMetrics(sessionsData);
+
+      // If there's a selected session, refresh its details too
+      if (selectedSession) {
+        const sessionDetailRes = await axios.get(`/api/sessions/${selectedSession.id}`);
+        const sessionDetail = sessionDetailRes.data.data;
+        setSelectedSession(sessionDetail);
+
+        if (sessionDetail.turns && sessionDetail.turns.length > 0) {
+          generateConversationFlow(sessionDetail.turns);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing sessions:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleReanalyzeSession = async (sessionId: string) => {
+    try {
+      setIsReanalyzing(true);
+      console.log(`[UI] Re-analyzing session ${sessionId}...`);
+
+      // Call the reanalyze endpoint
+      const response = await axios.post(`/api/sessions/${sessionId}/reanalyze`);
+      console.log(`[UI] Re-analysis completed:`, response.data);
+
+      // Refresh the session details
+      const sessionDetailRes = await axios.get(`/api/sessions/${sessionId}`);
+      const sessionDetail = sessionDetailRes.data.data;
+      setSelectedSession(sessionDetail);
+
+      // Refresh all sessions to update the list
+      const sessionsRes = await axios.get(`/api/participants/${id}/sessions`);
+      const sessionsData = sessionsRes.data.data || [];
+      setSessions(sessionsData);
+
+      // Recalculate metrics
+      calculateWeeklyMetrics(sessionsData);
+
+      alert('Session analytics updated successfully!');
+    } catch (error: any) {
+      console.error('Error re-analyzing session:', error);
+      alert(`Failed to re-analyze session: ${error.response?.data?.message || error.message}`);
+    } finally {
+      setIsReanalyzing(false);
     }
   };
 
@@ -398,9 +383,16 @@ export default function PatientProfile() {
   };
 
   if (isLoading) {
+    console.log('Rendering loading screen...');
     return (
-      <div className="flex h-screen items-center justify-center bg-[var(--color-bg-primary)]">
-        <div className="inline-block h-10 w-10 animate-spin rounded-full border-3 border-solid border-[var(--color-accent)] border-r-transparent"></div>
+      <div className="flex flex-col h-screen items-center justify-center bg-white">
+        <div
+          className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-r-transparent mb-4"
+          style={{ borderColor: '#620000', borderRightColor: 'transparent' }}
+        ></div>
+        <p className="text-sm text-gray-600" style={{ fontFamily: 'var(--font-sans)' }}>
+          Loading patient profile...
+        </p>
       </div>
     );
   }
@@ -435,11 +427,20 @@ export default function PatientProfile() {
           className="text-xl font-bold tracking-tight text-gray-900"
           style={{ fontFamily: 'var(--font-serif)' }}
         >
-          patronum.ai
+          Patronum
         </h1>
 
-        <div className="text-sm text-gray-600" style={{ fontFamily: 'var(--font-sans)' }}>
-          Welcome, <span className="font-medium text-gray-900">{patient.caregiver?.name || 'Admin'}</span>
+        <div className="flex items-center gap-3">
+          <div className="text-sm text-gray-600" style={{ fontFamily: 'var(--font-sans)' }}>
+            <span className="font-medium text-gray-900">{patient.name}</span>
+          </div>
+          <button
+            onClick={() => navigate(`/admin/patients/${id}/settings`)}
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Patient Settings"
+          >
+            <Settings size={18} />
+          </button>
         </div>
       </header>
 
@@ -448,15 +449,30 @@ export default function PatientProfile() {
         {/* Left Sidebar - Recent Conversations */}
         <div className="w-80 bg-white border-r border-gray-200 overflow-y-auto">
           <div className="px-6 py-6 border-b border-gray-200">
-            <h2
-              className="text-sm font-bold text-gray-900 uppercase tracking-wide"
-              style={{ fontFamily: 'var(--font-sans)' }}
-            >
-              Recent Conversations
-            </h2>
-            <p className="text-xs text-gray-500 mt-1" style={{ fontFamily: 'var(--font-sans)' }}>
-              Last 7 days
-            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2
+                  className="text-sm font-bold text-gray-900 uppercase tracking-wide"
+                  style={{ fontFamily: 'var(--font-sans)' }}
+                >
+                  Recent Conversations
+                </h2>
+                <p className="text-xs text-gray-500 mt-1" style={{ fontFamily: 'var(--font-sans)' }}>
+                  Last 7 days
+                </p>
+              </div>
+              <button
+                onClick={handleRefreshSessions}
+                disabled={isRefreshing}
+                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Refresh conversations"
+              >
+                <RefreshCw
+                  size={14}
+                  className={isRefreshing ? 'animate-spin' : ''}
+                />
+              </button>
+            </div>
           </div>
 
           <div className="p-4 space-y-3">
@@ -516,22 +532,40 @@ export default function PatientProfile() {
         {/* Main Content Area */}
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-4xl mx-auto px-8 py-8">
-            {selectedSession ? (
+            {isLoadingSession ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="inline-block h-8 w-8 animate-spin rounded-full border-3 border-solid border-[var(--color-accent)] border-r-transparent"></div>
+              </div>
+            ) : selectedSession ? (
               <>
                 {/* Date Header */}
-                <div className="mb-6">
-                  <h2
-                    className="text-3xl font-semibold tracking-tight text-gray-900"
-                    style={{ fontFamily: 'var(--font-serif)' }}
-                  >
-                    {formatDate(selectedSession.startedAt)}
-                  </h2>
-                  <p
-                    className="text-sm text-gray-600 mt-1"
-                    style={{ fontFamily: 'var(--font-sans)' }}
-                  >
-                    {patient.name} • {patient.agents?.[0]?.name || 'Care Agent'}
-                  </p>
+                <div className="mb-6 flex items-start justify-between">
+                  <div>
+                    <h2
+                      className="text-3xl font-semibold tracking-tight text-gray-900"
+                      style={{ fontFamily: 'var(--font-serif)' }}
+                    >
+                      {formatDate(selectedSession.startedAt)}
+                    </h2>
+                    <p
+                      className="text-sm text-gray-600 mt-1"
+                      style={{ fontFamily: 'var(--font-sans)' }}
+                    >
+                      {patient.agents?.[0]?.name || 'Care Agent'}
+                    </p>
+                  </div>
+                  {selectedSession.status === 'completed' && (
+                    <button
+                      onClick={() => handleReanalyzeSession(selectedSession.id)}
+                      disabled={isReanalyzing}
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ fontFamily: 'var(--font-sans)' }}
+                      title="Re-run analytics for this session"
+                    >
+                      <BarChart3 size={14} className={isReanalyzing ? 'animate-spin' : ''} />
+                      {isReanalyzing ? 'Re-analyzing...' : 'Re-analyze'}
+                    </button>
+                  )}
                 </div>
 
                 {/* Summary Section */}
@@ -563,6 +597,7 @@ export default function PatientProfile() {
                       <ReactFlow
                         nodes={nodes}
                         edges={edges}
+                        nodeTypes={nodeTypes}
                         connectionMode={ConnectionMode.Loose}
                         fitView
                         panOnDrag={true}
@@ -579,16 +614,16 @@ export default function PatientProfile() {
                     </div>
                     <div className="flex items-center gap-6 mt-3 text-xs" style={{ fontFamily: 'var(--font-sans)' }}>
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-[#DC2626]" />
-                        <span className="text-gray-600">Patient</span>
+                        <div className="w-3 h-3 rounded-full bg-[#8C1515]" />
+                        <span className="text-gray-600">Patient (user)</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-[#F4A7A7]" />
-                        <span className="text-gray-600">Care Agent</span>
+                        <div className="w-3 h-3 rounded-full bg-[#2E5339]" />
+                        <span className="text-gray-600">AI moderator</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-[#E9D5FF]" />
-                        <span className="text-gray-600">Caretaker</span>
+                        <div className="w-3 h-3 rounded-full bg-[#620000]" />
+                        <span className="text-gray-600">AI patient agent</span>
                       </div>
                     </div>
                   </div>
@@ -596,17 +631,26 @@ export default function PatientProfile() {
 
                 {/* Full Transcript */}
                 {selectedSession.turns && selectedSession.turns.length > 0 && (
-                  <div className="mb-8">
+                  <div className="mb-8 pt-8 border-t border-gray-200">
                     <h3
                       className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-3"
                       style={{ fontFamily: 'var(--font-sans)' }}
                     >
                       Full Transcript
                     </h3>
-                    <div className="space-y-4">
+                    <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 border border-gray-200 rounded-lg p-4 bg-gray-50">
                       {selectedSession.turns.map((turn) => {
-                        const isParticipant = turn.speakerType === 'participant';
-                        const avatarColor = isParticipant ? '#DC2626' : '#F4A7A7';
+                        const isModerator = turn.speakerType === 'moderator';
+                        const isPatientAgent = turn.speakerType === 'agent';
+
+                        // Match colors from conversation flow and key
+                        let avatarColor = '#8C1515'; // Stanford Cardinal Red for user (default)
+                        if (isPatientAgent) {
+                          avatarColor = '#620000'; // Dark burgundy for AI patient agent
+                        } else if (isModerator) {
+                          avatarColor = '#2E5339'; // Stanford Palo Alto Green for AI moderator
+                        }
+
                         const initial = turn.speakerName.charAt(0).toUpperCase();
 
                         return (

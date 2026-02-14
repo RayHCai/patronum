@@ -6,7 +6,7 @@ import { generateModeratorOpening } from '../services/aiModerator';
 import { generateAgentPersonalities } from '../services/aiPatient';
 import { getHeygenService } from '../services/heygen';
 import { NUM_AI_AGENTS } from '../constants/config';
-import { analyzeParticipantSentiment, generateConversationSummary } from '../services/sessionAnalytics';
+import { completeSessionAnalysis } from '../services/sessionAnalytics';
 
 const router = Router();
 
@@ -32,7 +32,7 @@ router.get('/:id', async (req: Request, res, next) => {
         turns: {
           orderBy: { sequenceNumber: 'asc' },
         },
-        analytics: true,
+        sessionAnalytics: true,
       },
     });
 
@@ -338,8 +338,11 @@ router.post('/:id/generate-agents', async (req: Request, res, next) => {
 });
 
 /**
- * POST /api/sessions/:id/complete
- * Mark session as complete, analyze sentiment, and generate summary
+ * POST /api/sessions/:id/reanalyze
+ * Re-run analytics for an existing completed session
+ *
+ * This endpoint allows re-computing analytics for a session that was previously completed.
+ * Useful for applying updated analysis algorithms or fixing analysis issues.
  *
  * Request body: (none required)
  *
@@ -347,106 +350,130 @@ router.post('/:id/generate-agents', async (req: Request, res, next) => {
  * - success: boolean
  * - summary: string
  * - sentimentAnalysis: DementiaSentimentAnalysis
+ * - analytics: { totalTurns, participantTurnCount, avgTurnLength }
+ * - coherenceMetrics: { coherenceScore, topicShifts, contextualContinuity }
+ * - repetitionMetrics: { repetitionScore, repeatedPhrases, repeatedWords }
  */
-router.post('/:id/complete', async (req: Request, res, next) => {
+router.post('/:id/reanalyze', async (req: Request, res, next) => {
   try {
     const sessionId = req.params.id;
 
-    // Get session with participant info and turns
+    console.log(`[Session Reanalyze] Starting re-analysis for session ${sessionId}`);
+
+    // Verify session exists and is completed
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      include: {
-        participant: true,
-        turns: {
-          orderBy: { sequenceNumber: 'asc' },
-        },
-      },
     });
 
     if (!session) {
       throw new NotFoundError('Session');
     }
 
-    console.log(`[Session Complete] Completing session ${sessionId} with ${session.turns.length} turns`);
+    if (session.status !== 'completed') {
+      throw new ValidationError('Can only reanalyze completed sessions');
+    }
 
-    // 1. Extract participant-only turns for sentiment analysis
-    const participantTurns = session.turns.filter(turn => turn.speakerType === 'participant');
-    console.log(`[Session Complete] Found ${participantTurns.length} participant turns for analysis`);
-
-    // 2. Perform sentiment analysis on participant turns (ONLY THE USER)
-    const sentimentAnalysis = await analyzeParticipantSentiment(
-      participantTurns.map(turn => ({
-        speakerName: turn.speakerName,
-        speakerType: turn.speakerType,
-        speakerId: turn.speakerId || undefined,
-        content: turn.content,
-        audioUrl: turn.audioUrl || undefined,
-      })),
-      session.participant.name
-    );
-
-    console.log(`[Session Complete] Sentiment analysis completed - Overall: ${sentimentAnalysis.overallSentiment}`);
-
-    // 3. Generate conversation summary (all turns)
-    const conversationSummary = await generateConversationSummary(
-      session.turns.map(turn => ({
-        speakerName: turn.speakerName,
-        speakerType: turn.speakerType,
-        speakerId: turn.speakerId || undefined,
-        content: turn.content,
-        audioUrl: turn.audioUrl || undefined,
-      })),
-      session.participant.name
-    );
-
-    console.log(`[Session Complete] Conversation summary generated`);
-
-    // 4. Calculate basic analytics
-    const totalTurns = session.turns.length;
-    const participantTurnCount = participantTurns.length;
-    const avgTurnLength = participantTurns.length > 0
-      ? participantTurns.reduce((sum, turn) => sum + turn.content.split(/\s+/).length, 0) / participantTurns.length
-      : 0;
-
-    // 5. Update session with AI summary
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: {
-        status: 'completed',
-        endedAt: new Date(),
-        aiSummary: conversationSummary,
-      },
+    // Delete existing analytics to avoid duplicates
+    await prisma.sessionAnalytics.deleteMany({
+      where: { sessionId },
     });
 
-    // 6. Create session analytics record
-    await prisma.sessionAnalytics.create({
-      data: {
-        sessionId,
-        participantId: session.participantId,
-        turnCount: totalTurns,
-        participantTurnCount,
-        avgTurnLength,
-        sentimentAnalysis: sentimentAnalysis as any, // Store as JSON
-        computedAt: new Date(),
-      },
-    });
+    console.log(`[Session Reanalyze] Deleted existing analytics for session ${sessionId}`);
 
-    console.log(`[Session Complete] Session ${sessionId} marked as complete with analytics`);
+    // Re-run complete analysis using the same service logic
+    const result = await completeSessionAnalysis(sessionId);
+
+    console.log(`[Session Reanalyze] Session ${sessionId} reanalyzed successfully`);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('[Session Reanalyze] Error:', error);
+    next(error);
+  }
+});
+
+/**
+ * POST /api/sessions/batch-reanalyze
+ * Re-run analytics for multiple sessions
+ *
+ * Request body:
+ * - sessionIds: string[] (array of session IDs to reanalyze)
+ *
+ * Response:
+ * - success: boolean
+ * - results: { sessionId, success, error? }[]
+ * - summary: { total, succeeded, failed }
+ */
+router.post('/batch-reanalyze', async (req: Request, res, next) => {
+  try {
+    const { sessionIds } = req.body;
+
+    if (!Array.isArray(sessionIds) || sessionIds.length === 0) {
+      throw new ValidationError('sessionIds must be a non-empty array');
+    }
+
+    if (sessionIds.length > 20) {
+      throw new ValidationError('Cannot reanalyze more than 20 sessions at once');
+    }
+
+    console.log(`[Batch Reanalyze] Starting batch re-analysis for ${sessionIds.length} sessions`);
+
+    const results = await Promise.allSettled(
+      sessionIds.map(async (sessionId) => {
+        try {
+          // Verify session exists and is completed
+          const session = await prisma.session.findUnique({
+            where: { id: sessionId },
+          });
+
+          if (!session) {
+            throw new Error('Session not found');
+          }
+
+          if (session.status !== 'completed') {
+            throw new Error('Session is not completed');
+          }
+
+          // Delete existing analytics
+          await prisma.sessionAnalytics.deleteMany({
+            where: { sessionId },
+          });
+
+          // Re-run analysis
+          await completeSessionAnalysis(sessionId);
+
+          return { sessionId, success: true };
+        } catch (error: any) {
+          return { sessionId, success: false, error: error.message };
+        }
+      })
+    );
+
+    const processedResults = results.map((result) =>
+      result.status === 'fulfilled' ? result.value : result.reason
+    );
+
+    const succeeded = processedResults.filter(r => r.success).length;
+    const failed = processedResults.filter(r => !r.success).length;
+
+    console.log(`[Batch Reanalyze] Completed: ${succeeded} succeeded, ${failed} failed`);
 
     res.json({
       success: true,
       data: {
-        summary: conversationSummary,
-        sentimentAnalysis,
-        analytics: {
-          totalTurns,
-          participantTurnCount,
-          avgTurnLength: Math.round(avgTurnLength * 10) / 10,
+        results: processedResults,
+        summary: {
+          total: sessionIds.length,
+          succeeded,
+          failed,
         },
       },
     });
   } catch (error) {
-    console.error('[Session Complete] Error:', error);
+    console.error('[Batch Reanalyze] Error:', error);
     next(error);
   }
 });

@@ -1,7 +1,7 @@
 // Admin patient list page
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, Eye, Calendar } from 'lucide-react';
+import { Search, Plus, Calendar } from 'lucide-react';
 import AdminSidebar from '../../components/admin/Sidebar';
 import { Participant } from '../../types';
 import { getAllParticipants } from '../../services/participants';
@@ -160,7 +160,8 @@ export default function PatientList() {
               {filteredPatients.map((patient) => (
                 <div
                   key={patient.id}
-                  className="p-5 hover:bg-gray-50 transition-colors"
+                  onClick={() => navigate(`/admin/patients/${patient.id}`)}
+                  className="p-5 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -202,16 +203,6 @@ export default function PatientList() {
                         </div>
                       </div>
                     </div>
-
-                    {/* Actions */}
-                    <button
-                      onClick={() => navigate(`/admin/patients/${patient.id}`)}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-900 border border-gray-300 hover:bg-gray-50 transition-colors"
-                      style={{ fontFamily: 'var(--font-sans)' }}
-                    >
-                      <Eye size={16} />
-                      View
-                    </button>
                   </div>
                 </div>
               ))}
