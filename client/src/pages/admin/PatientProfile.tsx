@@ -23,13 +23,13 @@ function CircularNode({ data }: NodeProps) {
       <Handle
         type="target"
         position={Position.Top}
-        style={{ background: 'transparent', border: 'none', top: 0 }}
+        style={{ background: 'transparent', border: 'none', top: -12 }}
       />
       <div>{data.label}</div>
       <Handle
         type="source"
         position={Position.Bottom}
-        style={{ background: 'transparent', border: 'none', bottom: 0 }}
+        style={{ background: 'transparent', border: 'none', bottom: -12 }}
       />
     </div>
   );
