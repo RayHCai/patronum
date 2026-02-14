@@ -6,8 +6,48 @@ import { generateModeratorOpening } from '../services/aiModerator';
 import { generateAgentPersonalities } from '../services/aiPatient';
 import { getHeygenService } from '../services/heygen';
 import { NUM_AI_AGENTS } from '../constants/config';
+import { analyzeParticipantSentiment, generateConversationSummary } from '../services/sessionAnalytics';
 
 const router = Router();
+
+/**
+ * GET /api/sessions/:id
+ * Get session details with turns
+ *
+ * Response:
+ * - session: Session with turns, participant, and agents
+ */
+router.get('/:id', async (req: Request, res, next) => {
+  try {
+    const sessionId = req.params.id;
+
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      include: {
+        participant: {
+          include: {
+            agents: true,
+          },
+        },
+        turns: {
+          orderBy: { sequenceNumber: 'asc' },
+        },
+        analytics: true,
+      },
+    });
+
+    if (!session) {
+      throw new NotFoundError('Session');
+    }
+
+    res.json({
+      success: true,
+      data: session,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 /**
  * POST /api/sessions/initialize
@@ -299,22 +339,24 @@ router.post('/:id/generate-agents', async (req: Request, res, next) => {
 
 /**
  * POST /api/sessions/:id/complete
- * Mark session as complete and extract memories
+ * Mark session as complete, analyze sentiment, and generate summary
  *
  * Request body: (none required)
  *
  * Response:
  * - success: boolean
- * - memoriesExtracted: number
+ * - summary: string
+ * - sentimentAnalysis: DementiaSentimentAnalysis
  */
 router.post('/:id/complete', async (req: Request, res, next) => {
   try {
     const sessionId = req.params.id;
 
-    // Get session
+    // Get session with participant info and turns
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
       include: {
+        participant: true,
         turns: {
           orderBy: { sequenceNumber: 'asc' },
         },
@@ -325,29 +367,86 @@ router.post('/:id/complete', async (req: Request, res, next) => {
       throw new NotFoundError('Session');
     }
 
-    console.log(`[Session Complete] Completing session ${sessionId}`);
+    console.log(`[Session Complete] Completing session ${sessionId} with ${session.turns.length} turns`);
 
-    // Update session status
+    // 1. Extract participant-only turns for sentiment analysis
+    const participantTurns = session.turns.filter(turn => turn.speakerType === 'participant');
+    console.log(`[Session Complete] Found ${participantTurns.length} participant turns for analysis`);
+
+    // 2. Perform sentiment analysis on participant turns (ONLY THE USER)
+    const sentimentAnalysis = await analyzeParticipantSentiment(
+      participantTurns.map(turn => ({
+        speakerName: turn.speakerName,
+        speakerType: turn.speakerType,
+        speakerId: turn.speakerId || undefined,
+        content: turn.content,
+        audioUrl: turn.audioUrl || undefined,
+      })),
+      session.participant.name
+    );
+
+    console.log(`[Session Complete] Sentiment analysis completed - Overall: ${sentimentAnalysis.overallSentiment}`);
+
+    // 3. Generate conversation summary (all turns)
+    const conversationSummary = await generateConversationSummary(
+      session.turns.map(turn => ({
+        speakerName: turn.speakerName,
+        speakerType: turn.speakerType,
+        speakerId: turn.speakerId || undefined,
+        content: turn.content,
+        audioUrl: turn.audioUrl || undefined,
+      })),
+      session.participant.name
+    );
+
+    console.log(`[Session Complete] Conversation summary generated`);
+
+    // 4. Calculate basic analytics
+    const totalTurns = session.turns.length;
+    const participantTurnCount = participantTurns.length;
+    const avgTurnLength = participantTurns.length > 0
+      ? participantTurns.reduce((sum, turn) => sum + turn.content.split(/\s+/).length, 0) / participantTurns.length
+      : 0;
+
+    // 5. Update session with AI summary
     await prisma.session.update({
       where: { id: sessionId },
       data: {
         status: 'completed',
         endedAt: new Date(),
+        aiSummary: conversationSummary,
       },
     });
 
-    // TODO: Extract memories from conversation (implement later if needed)
-    const memoriesExtracted = 0;
+    // 6. Create session analytics record
+    await prisma.sessionAnalytics.create({
+      data: {
+        sessionId,
+        participantId: session.participantId,
+        turnCount: totalTurns,
+        participantTurnCount,
+        avgTurnLength,
+        sentimentAnalysis: sentimentAnalysis as any, // Store as JSON
+        computedAt: new Date(),
+      },
+    });
 
-    console.log(`[Session Complete] Session ${sessionId} marked as complete`);
+    console.log(`[Session Complete] Session ${sessionId} marked as complete with analytics`);
 
     res.json({
       success: true,
       data: {
-        memoriesExtracted,
+        summary: conversationSummary,
+        sentimentAnalysis,
+        analytics: {
+          totalTurns,
+          participantTurnCount,
+          avgTurnLength: Math.round(avgTurnLength * 10) / 10,
+        },
       },
     });
   } catch (error) {
+    console.error('[Session Complete] Error:', error);
     next(error);
   }
 });

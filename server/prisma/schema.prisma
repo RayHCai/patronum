@@ -180,6 +180,7 @@ model SessionAnalytics {
   topicCoherenceScore   Float?   @map("topic_coherence_score")
   repeatedPhrases       Json?    @map("repeated_phrases") // JSON array
   repeatedStories       Json?    @map("repeated_stories") // JSON array
+  sentimentAnalysis     Json?    @map("sentiment_analysis") // Dementia-focused sentiment analysis
   computedAt            DateTime @default(now()) @map("computed_at")
 
   session     Session     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
