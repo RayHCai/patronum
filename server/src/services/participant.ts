@@ -161,5 +161,10 @@ export const getParticipantSessions = async (
     take: limit,
   });
 
+  console.log(`[Participant Service] Fetched ${sessions.length} sessions for participant ${participantId}`);
+  sessions.forEach(session => {
+    console.log(`  Session ${session.id}: status=${session.status}, aiSummary=${!!session.aiSummary}, analytics=${session.sessionAnalytics.length}`);
+  });
+
   return sessions;
 };

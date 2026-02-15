@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import NeuralBackground from './NeuralBackground';
 
 interface AuthLayoutProps {
   children: ReactNode;
@@ -12,8 +13,8 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
 
   return (
     <div className="min-h-screen bg-[var(--color-bg-primary)] relative overflow-hidden">
-      {/* Soft gradient background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-red-50/30 via-white to-red-50/20 pointer-events-none" />
+      {/* Neural network animated background */}
+      <NeuralBackground />
 
       {/* Back button */}
       <motion.button

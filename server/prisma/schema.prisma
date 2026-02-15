@@ -170,18 +170,21 @@ model CognitiveGameResult {
 }
 
 model SessionAnalytics {
-  id                    Int      @id @default(autoincrement())
-  sessionId             String   @map("session_id")
-  participantId         String   @map("participant_id")
-  turnCount             Int?     @map("turn_count")
-  participantTurnCount  Int?     @map("participant_turn_count")
-  avgTurnLength         Float?   @map("avg_turn_length")
-  lexicalDiversity      Float?   @map("lexical_diversity") // type-token ratio
-  topicCoherenceScore   Float?   @map("topic_coherence_score")
-  repeatedPhrases       Json?    @map("repeated_phrases") // JSON array
-  repeatedStories       Json?    @map("repeated_stories") // JSON array
-  sentimentAnalysis     Json?    @map("sentiment_analysis") // Dementia-focused sentiment analysis
-  computedAt            DateTime @default(now()) @map("computed_at")
+  id                    Int       @id @default(autoincrement())
+  sessionId             String    @map("session_id")
+  participantId         String    @map("participant_id")
+  turnCount             Int?      @map("turn_count")
+  participantTurnCount  Int?      @map("participant_turn_count")
+  avgTurnLength         Float?    @map("avg_turn_length")
+  lexicalDiversity      Float?    @map("lexical_diversity") // type-token ratio
+  topicCoherenceScore   Float?    @map("topic_coherence_score")
+  repeatedPhrases       Json?     @map("repeated_phrases") // JSON array
+  repeatedStories       Json?     @map("repeated_stories") // JSON array
+  sentimentAnalysis     Json?     @map("sentiment_analysis") // Dementia-focused sentiment analysis
+  speechGraphMetrics    Json?     @map("speech_graph_metrics") // Speech Graph Analysis metrics (LSC, LCC, loops, etc.)
+  graphStructure        Json?     @map("graph_structure") // Graph nodes and edges for D3.js visualization
+  graphComputedAt       DateTime? @map("graph_computed_at")
+  computedAt            DateTime  @default(now()) @map("computed_at")
 
   session     Session     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)

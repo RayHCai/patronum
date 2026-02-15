@@ -66,12 +66,6 @@ export default function PatientAuth() {
           >
             Don't have an access code?
           </p>
-          <p
-            className="text-xs text-center text-[var(--color-text-muted)] mb-4"
-            style={{ fontFamily: 'var(--font-sans)' }}
-          >
-            Please contact your healthcare provider or administrator to receive your personal access link.
-          </p>
 
           <motion.button
             onClick={() => navigate('/admin/auth/login')}

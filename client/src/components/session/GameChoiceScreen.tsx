@@ -7,12 +7,15 @@ interface GameChoiceScreenProps {
 }
 
 export default function GameChoiceScreen({ onYes, onNo }: GameChoiceScreenProps) {
+  console.log('[GameChoiceScreen] Component rendering');
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 bg-gradient-to-br from-blue-50 to-purple-50 z-50 flex items-center justify-center"
+      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }}
     >
       <motion.div
         initial={{ scale: 0.9, y: 20 }}

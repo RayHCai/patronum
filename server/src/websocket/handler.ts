@@ -150,13 +150,24 @@ export class ConversationWebSocketHandler {
         return this.sendError(ws, 'Session ID required');
       }
 
-      // Mark session as complete and run analytics
+      // Mark session as complete and run analytics (including speech graph)
       console.log(`[WebSocket Handler] Completing session ${sessionId} and running analytics...`);
       try {
-        await completeSessionAnalysis(sessionId);
+        const result = await completeSessionAnalysis(sessionId);
         console.log(`[WebSocket Handler] Session ${sessionId} marked as complete with analytics`);
+        console.log(`[WebSocket Handler] Analytics result:`, {
+          hasSummary: !!result.summary,
+          sentiment: result.sentimentAnalysis.overallSentiment,
+          turnCount: result.analytics.totalTurns,
+          participantTurns: result.analytics.participantTurnCount,
+          speechGraphStatus: result.speechGraphStatus
+        });
+        if (result.speechGraphStatus === 'failed') {
+          console.warn(`[WebSocket Handler] Speech graph analysis failed: ${result.speechGraphError}`);
+        }
       } catch (error: any) {
         console.error(`[WebSocket Handler] Failed to complete session analysis:`, error);
+        console.error(`[WebSocket Handler] Error stack:`, error.stack);
         // Continue anyway - we still want to send confirmation to client
       }
 

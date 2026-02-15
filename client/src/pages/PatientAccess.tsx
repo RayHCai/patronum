@@ -115,12 +115,6 @@ export default function PatientAccess() {
               {error}
             </p>
           </div>
-          <p
-            className="text-sm text-[var(--color-text-secondary)] text-center"
-            style={{ fontFamily: 'var(--font-sans)' }}
-          >
-            Please contact your administrator for a valid access link.
-          </p>
         </motion.div>
       </AuthLayout>
     );
