@@ -34,6 +34,9 @@ export default function NewSession() {
     gameType,
     cognitiveGameQuestions,
     turns,
+    moderatorAvatarId,
+    currentPhotoUrl,
+    currentPhotoCaption,
     setMicState,
     setShowGameChoice,
     setShowCognitiveGame,
@@ -386,8 +389,20 @@ export default function NewSession() {
           currentSpeakerId={currentSpeakerId}
           moderator={{
             id: 'moderator',
-            name: 'Maya',
+            name: 'Marcus',
             color: '#065f46',
+            heygenConfig: moderatorAvatarId ? {
+              avatarId: moderatorAvatarId,
+              appearance: {
+                gender: 'male',
+                ethnicity: 'Caucasian',
+                age: 35,
+                clothing: 'professional attire',
+                background: 'office',
+              },
+              createdAt: new Date().toISOString(),
+              lastUsed: new Date().toISOString(),
+            } : undefined,
           }}
         />
       </div>
@@ -399,6 +414,33 @@ export default function NewSession() {
         color={currentSubtitle?.color || '#000'}
         isVisible={!!currentSubtitle}
       />
+
+      {/* Photo Memory Overlay */}
+      {currentPhotoUrl && (
+        <div className="fixed bottom-32 right-8 z-30 animate-fade-in">
+          <div className="bg-white rounded-xl shadow-2xl p-5 max-w-sm border-2 border-gray-200">
+            <img
+              src={currentPhotoUrl}
+              alt={currentPhotoCaption || "Memory photo"}
+              className="rounded-lg w-full max-h-64 object-cover mb-3"
+            />
+            {currentPhotoCaption && (
+              <p
+                className="text-sm text-gray-700 leading-relaxed mb-2"
+                style={{ fontFamily: 'var(--font-sans)' }}
+              >
+                {currentPhotoCaption}
+              </p>
+            )}
+            <p
+              className="text-xs text-gray-400 italic"
+              style={{ fontFamily: 'var(--font-sans)' }}
+            >
+              From your photo collection
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Microphone Bar */}
       <MicrophoneBar

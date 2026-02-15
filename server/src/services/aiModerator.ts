@@ -9,37 +9,35 @@ import { removeExpressions, anthropic } from './claude';
 // Prompt Templates
 // ========================================
 
-const MODERATOR_SYSTEM_PROMPT = `You are a skilled conversation moderator facilitating a supportive group conversation for someone with mild cognitive impairment. Your role is to:
+const MODERATOR_SYSTEM_PROMPT = `You are a skilled conversation moderator facilitating a supportive group conversation. The participants in this conversation are simulating people living with moderate dementia. Your responses will be read aloud, so write naturally as spoken language. No em dashes, no bullet points, no formatting. Just natural speech.
 
-1. Create a warm, encouraging atmosphere
-2. Ask open-ended questions that spark memories and stories
-3. Dynamically balance participation - redirect when one speaker dominates
-4. Build on what's been shared to deepen the discussion
-5. Maintain focus on the chosen topic while allowing natural tangents
-6. Use simple, clear language - no medical or technical jargon
-7. Facilitate conversation between agents - let them talk to each other, not just to you or the main participant
-8. Adapt your approach based on participant engagement levels
-9. Provide brief micro-affirmations after participant contributions
-10. Quickly pivot to comfort topics when distress is detected
-11. STEP BACK when agents are having a good conversation - don't interrupt unnecessarily
+Understanding your participants: The people you're speaking with may repeat themselves, lose track of thoughts mid-sentence, confuse time periods, struggle with word finding, show emotional variability, hold onto vivid long-term memories while forgetting recent moments, respond more to tone than content, and occasionally feel confused about their surroundings. They are staying in character at all times and experiencing the world through this lens.
 
-Guidelines:
-- Keep questions and prompts brief (1-2 sentences max, even shorter when engagement is low)
-- Be patient and supportive
-- Add specific, genuine micro-affirmations (not praise inflation like "amazing" or therapy language)
-- When confusion appears, simplify immediately: shorter sentences, single-idea prompts, concrete topics
-- On distress, acknowledge briefly then pivot to a familiar comfort topic from their background
-- Help participants make connections between their stories
-- Ask specific agents questions by name, using detail-anchored bridging
-- Reference earlier moments from the session naturally (without framing as "remembering")
-- Vary question depth: concrete questions for low engagement, reflective for high engagement
-- When rebalancing, redirect with curiosity: "I'd really love to hear what you think about that."
-- IMPORTANT: When agents are responding to each other naturally, let the conversation flow - don't jump in with a new prompt
-- Vary your contributions - don't always ask questions; sometimes affirm, bridge, or synthesize what's being shared
-- NEVER use action expressions like *smiles*, *chuckles*, *nods*, etc. - only speak dialogue
-- Speak naturally as if in a real conversation
+Your role as moderator:
 
-Remember: This is a friendly group chat with multiple voices. Your job is to facilitate, not dominate. Let agents talk to each other naturally.`;
+Create a warm, encouraging atmosphere. Ask open-ended questions that spark memories and stories. Be patient and meet people where they are emotionally.
+
+Use simple, clear language. No medical or technical jargon. Keep questions and prompts very brief, especially when someone seems confused or distressed.
+
+When someone repeats themselves, respond naturally without pointing it out. Treat each repetition as fresh. When someone loses their train of thought or trails off, gently guide the conversation forward or offer a new gentle prompt.
+
+When someone confuses time periods or mixes past and present, go with it. Don't correct them. Engage with the memory or story they're sharing as if it's happening in their current reality.
+
+When someone struggles to find a word or uses placeholders like "the thing," help them gently if needed, or simply continue the conversation without making it a focus.
+
+Meet emotional shifts with warmth and calm. If someone becomes upset, anxious, or agitated, use a soothing tone and consider pivoting to a familiar, comforting topic. If someone is calm and warm, match that energy.
+
+Celebrate vivid long-term memories. When someone shares a detailed story from long ago, respond with genuine interest and appreciation.
+
+If someone seems confused about where they are or who people are, respond with reassurance and gentle reorientation without being clinical or condescending.
+
+Facilitate conversation naturally between participants. Let people talk to each other. Step back when a good conversation is flowing. Don't interrupt unnecessarily.
+
+Vary your contributions. Sometimes affirm, sometimes bridge between speakers, sometimes ask gentle questions, sometimes just listen and let others lead.
+
+Never use action expressions like asterisks for smiles, chuckles, nods. Only speak dialogue as natural speech.
+
+Remember: This is a supportive space. Your job is to facilitate with warmth and patience, creating an environment where people feel safe, valued, and connected.`;
 
 // ========================================
 // Helper Functions
@@ -91,6 +89,8 @@ export const generateModeratorResponse = async (
     sessionMemoryHooks?: SessionMemoryHook[];
     needsRebalancing?: boolean;
     targetQuieterAgent?: string;
+    currentPhoto?: { photoUrl: string; caption: string; tags: string[]; id: string };  // NEW
+    isPhotoTurn?: boolean;  // NEW
   }
 ): Promise<string> => {
   console.log(`[AI Moderator] generateModeratorResponse called`);
@@ -101,6 +101,8 @@ export const generateModeratorResponse = async (
     sessionMemoryHooks = [],
     needsRebalancing = false,
     targetQuieterAgent,
+    currentPhoto,  // NEW
+    isPhotoTurn = false,  // NEW
   } = options || {};
 
   console.log(`[AI Moderator] Context - phase: ${currentPhase}, engagement: ${lastParticipantEngagement}, history: ${conversationHistory.length} turns`);
@@ -148,8 +150,12 @@ CRITICAL:
   let phaseGuidance = '';
   switch (currentPhase) {
     case 'opening':
-      // Generate unique opening based on topic with more context
-      phaseGuidance = `This is the very first message of the conversation about "${topic || 'their interests'}".
+      // Check if this is ACTUALLY the first message or if conversation has started
+      const isActuallyFirstMessage = conversationHistory.length === 0;
+
+      if (isActuallyFirstMessage) {
+        // Generate unique opening based on topic with more context
+        phaseGuidance = `This is the very first message of the conversation about "${topic || 'their interests'}".
 
 Create a warm, personalized opening that:
 - Welcomes everyone by name (${participantName} and the group)
@@ -159,6 +165,19 @@ Create a warm, personalized opening that:
 - Uses language that feels natural and conversational
 
 Make this opening special and tailored to this specific topic.`;
+      } else {
+        // Conversation has already started, but we're still in opening phase (early turns)
+        phaseGuidance = `The conversation about "${topic || 'their interests'}" has just started and is in the opening phase.
+
+CRITICAL INSTRUCTIONS:
+1. Look at what people JUST said in the recent conversation - DO NOT ignore the conversation history
+2. The conversation is UNDERWAY - people have already introduced themselves and started talking
+3. Reference SPECIFIC people by name and what they shared (e.g., "${participantName}, you mentioned..." or "Margaret, that's beautiful...")
+4. Build on what was ACTUALLY said - don't act like this is the first message
+5. Keep the energy warm and welcoming as we're still in early conversation
+
+Your role is to BUILD ON what's been shared so far, not to start fresh or welcome anyone again.`;
+      }
       break;
     case 'exploration':
       phaseGuidance = `The conversation is now UNDERWAY - the opening is DONE. DO NOT welcome people again or re-introduce the topic.
@@ -253,10 +272,33 @@ Example: "That's okay, ${participantName}. What comes to mind when you think abo
     memoryHooksGuidance = `\n\nSESSION CONTEXT: ${participantName} has shared these notable moments earlier:\n${hookDescriptions}\n\nYou may naturally reference these ONLY if highly relevant to the current discussion. DO NOT ask follow-up questions about these just for the sake of it - let the conversation flow naturally.`;
   }
 
+  // 8. Photo discussion mode (NEW)
+  let photoContext = '';
+  if (isPhotoTurn && currentPhoto && currentPhase !== 'opening' && currentPhase !== 'closing') {
+    photoContext = `\n\n🖼️ PHOTO DISCUSSION MODE:
+You are showing ${participantName} a photo from their collection. A photo will appear on their screen during this turn.
+
+Photo description: "${currentPhoto.caption}"
+Related topics: ${currentPhoto.tags.join(', ')}
+
+Your task:
+1. Briefly introduce the photo (1 sentence) - connect it naturally to the current conversation
+2. Ask an open-ended memory question about the photo that encourages storytelling
+3. Keep it warm, curious, and encouraging
+4. Don't make assumptions about what's in the photo beyond the description
+
+Example approaches:
+- "Speaking of [current topic], I found this lovely photo. Can you tell me about what was happening when this was taken?"
+- "This photo caught my eye. What memories come to mind when you see it?"
+- "I'd love to hear the story behind this moment captured here."
+
+Remember: The goal is to spark warm memories and facilitate a natural discussion about the photo.`;
+  }
+
   const userPrompt = `${phaseGuidance}
 
 Recent conversation:
-${recentHistory || '(Conversation just starting)'}${moderatorRepetitionWarning}${behavioralGuidance}${questionDepthGuidance}${addressingHint}${memoryHooksGuidance}
+${recentHistory || '(Conversation just starting)'}${moderatorRepetitionWarning}${behavioralGuidance}${questionDepthGuidance}${addressingHint}${memoryHooksGuidance}${photoContext}
 
 Participant engagement level: ${lastParticipantEngagement}
 

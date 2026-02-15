@@ -8,6 +8,13 @@ import { getHeygenService } from '../services/heygen';
 import { NUM_AI_AGENTS } from '../constants/config';
 import { completeSessionAnalysis } from '../services/sessionAnalytics';
 import { analyzeSessionSpeechGraph } from '../services/speechGraphAnalysis';
+import {
+  shouldShowPhotoThisTurn,
+  selectPhotoForTurn,
+  incrementPhotoTurnCounter,
+  updateLastShownPhotos,
+} from '../services/photoSelection';
+import { recordPhotoShown } from '../services/participant';
 
 const router = Router();
 
@@ -163,9 +170,9 @@ router.post('/initialize', async (req: Request, res, next) => {
 
     console.log(`[Session Init] Generated moderator opening: "${moderatorOpeningText.substring(0, 50)}..."`);
 
-    // 3. Get HeyGen avatar ID for moderator
+    // 3. Get HeyGen avatar ID for moderator (Marcus - using Wayne avatar for distinction)
     const heygenService = getHeygenService();
-    const moderatorAvatarId = process.env.HEYGEN_MODERATOR_AVATAR_ID || 'default-moderator-avatar';
+    const moderatorAvatarId = process.env.HEYGEN_MODERATOR_AVATAR_ID || 'Wayne_20240711';
 
     // Store moderator context in session
     await prisma.session.update({
@@ -424,6 +431,107 @@ router.post('/:id/generate-agents', async (req: Request, res, next) => {
       },
     });
   } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/sessions/:id/select-photo
+ * Select a photo for the current moderator turn
+ *
+ * This endpoint checks if a photo should be shown and selects the most relevant one
+ * based on conversation context and photo metadata.
+ *
+ * Request body: (none required)
+ *
+ * Response:
+ * - shouldShowPhoto: boolean
+ * - photo?: { id, photoUrl, caption, tags } (if shouldShowPhoto is true)
+ */
+router.post('/:id/select-photo', async (req: Request, res, next) => {
+  try {
+    const sessionId = req.params.id;
+
+    console.log(`[Photo Selection] Checking photo turn for session ${sessionId}`);
+
+    // Verify session exists
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      include: {
+        turns: {
+          orderBy: { sequenceNumber: 'desc' },
+          take: 5,
+        },
+      },
+    });
+
+    if (!session) {
+      throw new NotFoundError('Session');
+    }
+
+    // Check if this should be a photo turn
+    const shouldShow = await shouldShowPhotoThisTurn(sessionId);
+
+    if (!shouldShow) {
+      console.log(`[Photo Selection] Not a photo turn, skipping`);
+      // Still increment counter for next time
+      await incrementPhotoTurnCounter(sessionId);
+      return res.json({
+        success: true,
+        data: {
+          shouldShowPhoto: false,
+        },
+      });
+    }
+
+    // Get moderator context for lastShownPhotoIds
+    const context = session.moderatorContext as any || {};
+    const lastShownPhotoIds = context.lastShownPhotoIds || [];
+
+    // Select photo based on conversation history
+    const conversationHistory = session.turns.map(turn => ({
+      content: turn.content,
+      speakerName: turn.speakerName || 'Unknown',
+    }));
+
+    const selectedPhoto = await selectPhotoForTurn(
+      session.participantId,
+      conversationHistory,
+      lastShownPhotoIds
+    );
+
+    if (!selectedPhoto) {
+      console.log(`[Photo Selection] No suitable photo found`);
+      await incrementPhotoTurnCounter(sessionId);
+      return res.json({
+        success: true,
+        data: {
+          shouldShowPhoto: false,
+        },
+      });
+    }
+
+    // Update photo statistics
+    await recordPhotoShown(selectedPhoto.id);
+    await updateLastShownPhotos(sessionId, selectedPhoto.id);
+    await incrementPhotoTurnCounter(sessionId);
+
+    console.log(`[Photo Selection] Selected photo ${selectedPhoto.id} for session ${sessionId}`);
+
+    res.json({
+      success: true,
+      data: {
+        shouldShowPhoto: true,
+        photo: {
+          id: selectedPhoto.id,
+          photoUrl: selectedPhoto.photoUrl,
+          caption: selectedPhoto.caption,
+          tags: selectedPhoto.tags,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('[Photo Selection] Error:', error);
     next(error);
   }
 });

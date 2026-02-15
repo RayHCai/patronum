@@ -42,6 +42,7 @@ model Participant {
   patientUser          PatientUser?
   agents               Agent[]
   sessions             Session[]
+  photos               PatientPhoto[]
   reinforcementItems   ReinforcementItem[]
   sessionAnalytics     SessionAnalytics[]
   cognitiveGameResults CognitiveGameResult[]
@@ -99,6 +100,9 @@ model Turn {
   speakerName    String   @map("speaker_name")
   content        String
   audioUrl       String?  @map("audio_url")
+  photoUrl       String?  @map("photo_url")    // Photo displayed during turn
+  photoId        String?  @map("photo_id")     // Reference to PatientPhoto
+  isPhotoTurn    Boolean  @default(false) @map("is_photo_turn")
   timestamp      DateTime @default(now())
   sequenceNumber Int      @map("sequence_number")
 
@@ -106,6 +110,23 @@ model Turn {
 
   @@index([sessionId])
   @@map("turns")
+}
+
+model PatientPhoto {
+  id            String    @id @default(cuid())
+  participantId String    @map("participant_id")
+  photoUrl      String    @map("photo_url")
+  caption       String?
+  tags          String[]  @default([])
+  isAIGenerated Boolean   @default(true) @map("is_ai_generated")
+  uploadedAt    DateTime  @default(now()) @map("uploaded_at")
+  lastShownAt   DateTime? @map("last_shown_at")
+  timesShown    Int       @default(0) @map("times_shown")
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([participantId])
+  @@map("patient_photos")
 }
 
 model AgentMemory {

@@ -1,6 +1,7 @@
 // NEW: Conversation flow hook for linear loop architecture with HeyGen integration
 import { useCallback, useRef } from 'react';
 import { useConversationStore } from '../stores/conversationStore';
+import { useVideoStreamManager } from './useVideoStreamManager';
 import { Turn } from '../types';
 import StreamingAvatar from '@heygen/streaming-avatar';
 import { NUM_AI_AGENTS } from '../constants/config';
@@ -26,6 +27,7 @@ interface HeygenAvatarInstance {
 
 export const useNewConversationFlow = () => {
   const store = useConversationStore();
+  const { initializeStream } = useVideoStreamManager();
 
   // HeyGen avatar instances (one per agent + moderator)
   const heygenAvatars = useRef<Map<string, HeygenAvatarInstance>>(new Map());
@@ -83,6 +85,7 @@ export const useNewConversationFlow = () => {
 
       store.setSessionId(sessionId);
       store.setModeratorId(moderatorId);
+      store.setModeratorAvatarId(moderatorInitialMessage.avatarId);
 
       // Step 2: Generate agents in parallel
       console.log('\n\n');
@@ -161,7 +164,7 @@ export const useNewConversationFlow = () => {
         sessionId,
         speakerType: 'moderator',
         speakerId: moderatorId,
-        speakerName: 'Maya',
+        speakerName: 'Marcus',
         content: moderatorInitialMessage.text,
         sequenceNumber: 0,
         timestamp: new Date().toISOString(),
@@ -172,7 +175,7 @@ export const useNewConversationFlow = () => {
         sessionId,
         speakerType: 'moderator',
         speakerId: moderatorId,
-        speakerName: 'Maya',
+        speakerName: 'Marcus',
         content: moderatorInitialMessage.text,
         sequenceNumber: 0,
         timestamp: new Date().toISOString(),
@@ -204,16 +207,21 @@ export const useNewConversationFlow = () => {
     if (!token) throw new Error('Not authenticated');
 
     try {
+      // Initialize moderator video stream (mark as active in store)
+      console.log('[New Flow] Initializing moderator video stream...');
+      await initializeStream('moderator');
+
       // Initialize moderator avatar
       console.log('[New Flow] Initializing moderator HeyGen avatar...');
       await initializeHeygenAvatar('moderator', moderatorAvatarId, token);
 
-      // Initialize agent avatars in parallel
-      console.log('[New Flow] Initializing agent HeyGen avatars...');
+      // Initialize agent video streams and avatars in parallel
+      console.log('[New Flow] Initializing agent video streams and HeyGen avatars...');
       await Promise.all(
-        agents.map(agent =>
-          initializeHeygenAvatar(agent.id, agent.heygenAvatarId, token)
-        )
+        agents.map(async (agent) => {
+          await initializeStream(agent.id);
+          await initializeHeygenAvatar(agent.id, agent.heygenAvatarId, token);
+        })
       );
 
       console.log('[New Flow] All HeyGen avatars initialized');
@@ -395,7 +403,11 @@ export const useNewConversationFlow = () => {
   /**
    * Generate text for moderator or agent
    */
-  const generateText = async (speakerId: string, speakerType: 'moderator' | 'agent'): Promise<string> => {
+  const generateText = async (
+    speakerId: string,
+    speakerType: 'moderator' | 'agent',
+    photoData?: { photoUrl: string; caption: string; tags: string[]; id: string } | null
+  ): Promise<string> => {
     const token = getAuthToken();
     if (!token) throw new Error('Not authenticated');
 
@@ -403,18 +415,26 @@ export const useNewConversationFlow = () => {
       ? `${API_URL}/api/ai-moderator/generate-response`
       : `${API_URL}/api/ai-patients/generate-response`;
 
+    const requestBody: any = {
+      sessionId: store.sessionId,
+      ...(speakerType === 'agent' ? { agentId: speakerId } : {}),
+      conversationHistory: store.turns.slice(-8),
+      loopCount: store.loopCount,
+    };
+
+    // Add photo context for moderator turns if available
+    if (speakerType === 'moderator' && photoData) {
+      requestBody.currentPhoto = photoData;
+      requestBody.isPhotoTurn = true;
+    }
+
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
-      body: JSON.stringify({
-        sessionId: store.sessionId,
-        ...(speakerType === 'agent' ? { agentId: speakerId } : {}),
-        conversationHistory: store.turns.slice(-8),
-        loopCount: store.loopCount,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -446,9 +466,44 @@ export const useNewConversationFlow = () => {
 
     console.log(`[New Flow] 🎤 Speaker: ${currentSpeaker.name} (${currentSpeaker.type})`);
 
+    // Clear any previous photo at the start of a new turn
+    store.clearCurrentPhoto();
+
     try {
-      // 1. Check if pre-generated turn exists
-      console.log(`[New Flow] 📝 Step 1: Getting text for ${currentSpeaker.name}`);
+      // 1. Check for photo turn (if moderator)
+      let photoData: { photoUrl: string; caption: string; tags: string[]; id: string } | null = null;
+      if (currentSpeaker.type === 'moderator') {
+        console.log(`[New Flow] 🖼️ Step 1a: Checking for photo turn...`);
+        try {
+          const token = getAuthToken();
+          const photoResponse = await fetch(`${API_URL}/api/sessions/${state.sessionId}/select-photo`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+
+          if (photoResponse.ok) {
+            const photoResult = await photoResponse.json();
+            if (photoResult.data.shouldShowPhoto && photoResult.data.photo) {
+              photoData = photoResult.data.photo;
+              console.log(`[New Flow] ✅ Photo selected: ${photoData.id}`);
+              console.log(`[New Flow] Photo caption: "${photoData.caption?.substring(0, 60)}..."`);
+              // Set photo in store to display it
+              store.setCurrentPhoto(photoData.photoUrl, photoData.caption, photoData.id);
+            } else {
+              console.log(`[New Flow] ℹ️ No photo for this turn`);
+            }
+          }
+        } catch (photoError) {
+          console.warn(`[New Flow] ⚠️ Photo selection failed (non-critical):`, photoError);
+          // Continue without photo - don't break the conversation
+        }
+      }
+
+      // 2. Check if pre-generated turn exists
+      console.log(`[New Flow] 📝 Step 2: Getting text for ${currentSpeaker.name}`);
       let text: string;
       if (state.preGeneratedTurn && state.preGeneratedTurn.speakerId === currentSpeaker.id) {
         console.log(`[New Flow] ✨ Using pre-generated turn for ${currentSpeaker.name}`);
@@ -456,25 +511,25 @@ export const useNewConversationFlow = () => {
         text = state.preGeneratedTurn.text;
         store.clearPreGeneratedTurn();
       } else {
-        // Generate text
+        // Generate text with optional photo context
         console.log(`[New Flow] 🔍 No pre-generated turn, generating text from AI...`);
         const startTime = Date.now();
-        text = await generateText(currentSpeaker.id, currentSpeaker.type as 'moderator' | 'agent');
+        text = await generateText(currentSpeaker.id, currentSpeaker.type as 'moderator' | 'agent', photoData);
         const elapsed = Date.now() - startTime;
         console.log(`[New Flow] ✅ Text generated in ${elapsed}ms:`, text.substring(0, 100) + '...');
       }
 
-      // 2. Speak with HeyGen avatar (audio + video)
-      console.log(`[New Flow] 🔊 Step 2: Playing audio with HeyGen avatar...`);
+      // 3. Speak with HeyGen avatar (audio + video)
+      console.log(`[New Flow] 🔊 Step 3: Playing audio with HeyGen avatar...`);
       store.setIsPlaying(true);
       const startTime2 = Date.now();
       await speakWithHeygenAvatar(currentSpeaker.id, text);
       const elapsed2 = Date.now() - startTime2;
       console.log(`[New Flow] ✅ Avatar speaking completed in ${elapsed2}ms`);
 
-      // 3. Save turn to database
-      console.log(`[New Flow] 💾 Step 3: Saving turn to database...`);
-      const turnResult = await saveTurn({
+      // 4. Save turn to database (include photo data if present)
+      console.log(`[New Flow] 💾 Step 4: Saving turn to database...`);
+      const turnData: any = {
         sessionId: state.sessionId!,
         speakerType: currentSpeaker.type,
         speakerId: currentSpeaker.id,
@@ -482,7 +537,17 @@ export const useNewConversationFlow = () => {
         content: text,
         sequenceNumber: state.turns.length,
         timestamp: new Date().toISOString(),
-      });
+      };
+
+      // Add photo data if this was a photo turn
+      if (photoData) {
+        turnData.photoUrl = photoData.photoUrl;
+        turnData.photoId = photoData.id;
+        turnData.isPhotoTurn = true;
+        console.log(`[New Flow] 📸 Including photo in turn: ${photoData.id}`);
+      }
+
+      const turnResult = await saveTurn(turnData);
       console.log(`[New Flow] ✅ Turn saved with ID: ${turnResult.id}`);
 
       // Add to local store
@@ -495,14 +560,25 @@ export const useNewConversationFlow = () => {
         content: text,
         sequenceNumber: state.turns.length,
         timestamp: new Date().toISOString(),
+        ...(photoData && {
+          photoUrl: photoData.photoUrl,
+          photoId: photoData.id,
+          isPhotoTurn: true,
+        }),
       });
       console.log(`[New Flow] ✅ Turn added to local store, total turns: ${state.turns.length + 1}`);
 
-      // 4. Pre-generate next turn while audio plays
-      console.log(`[New Flow] 🚀 Step 4: Pre-generating next turn in background...`);
+      // Clear photo display after a delay (keep it visible during the turn)
+      if (photoData) {
+        // Photo will be cleared when the next speaker starts or turn advances
+        console.log(`[New Flow] 📸 Photo will be cleared when turn advances`);
+      }
+
+      // 5. Pre-generate next turn while audio plays
+      console.log(`[New Flow] 🚀 Step 5: Pre-generating next turn in background...`);
       preGenerateNextTurn();
 
-      // 5. When avatar finishes, advance to next speaker
+      // 6. When avatar finishes, advance to next speaker
       // Note: We'll use HeyGen's avatar_stop_talking event to trigger this
       console.log(`[New Flow] ℹ️ Will advance to next speaker when avatar stops talking`);
       console.log('[New Flow] ========================================');

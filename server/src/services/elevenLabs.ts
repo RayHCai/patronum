@@ -8,12 +8,12 @@ const ELEVENLABS_API_URL = 'https://api.elevenlabs.io/v1';
 // Voice ID mapping (using ElevenLabs conversational voices for variety)
 const VOICE_MAP: Record<string, string> = {
   mary_voice_en: 'EXAVITQu4vr4xnSDxMaL', // Bella - soft, calm female (fits gentle teacher)
-  robert_voice_en: 'GxRhbOQYg8POKS1uwEy4', // Rajesh Patel - Indian male voice (fits Robert Chen)
+  robert_voice_en: 'WLKp2jV6nrS8aMkPPDRO', // Rajesh Patel - Indian male voice (fits Robert Chen)
   susan_voice_en: 'ThT5KcBeYPX3keUQqHPh', // Dorothy - gentle, mature female (fits thoughtful librarian)
   james_voice_en: 'TxGEqnHWrfWFTfGW9XjX', // Josh - deep, laid-back male (fits relaxed musician)
   patricia_voice_en: 'MF3mGyEYCl7XYWbV9V6O', // Elli - caring, emotional female (fits empathetic nurse)
   margaret_chen_voice: 'EST9Ui6982FZPSi7gCHi', // Asian female voice (for Margaret Chen)
-  moderator_voice: 'DODLEQrClDo8wCz460ld', // Maya - moderator voice
+  moderator_voice: 'TxGEqnHWrfWFTfGW9XjX', // Marcus - moderator voice (Josh - deep, laid-back male)
 };
 
 // Minimal valid silent MP3 (1 second of silence)

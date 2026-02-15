@@ -23,45 +23,22 @@ export default function VideoAvatarGrid({
   currentSpeakerId,
   moderator,
 }: VideoAvatarGridProps) {
-  // Calculate grid layout based on total participants
-  const gridConfig = useMemo(() => {
-    const totalParticipants = agents.length + (moderator ? 1 : 0) + 1; // agents + moderator + participant
-
-    // Determine columns based on total participants (Zoom-like logic)
-    let columns: number;
-    if (totalParticipants <= 1) columns = 1;
-    else if (totalParticipants === 2) columns = 2;
-    // For 3 participants, use 3 columns to keep them in one symmetric row
-    // unless strictly vertical preference, but horizontal is usually better for video calls
-    else if (totalParticipants === 3) columns = 3;
-    else if (totalParticipants === 4) columns = 2; // 2x2 grid
-    else if (totalParticipants <= 6) columns = 3; // 3x2 grid
-    else if (totalParticipants <= 9) columns = 3; // 3x3 grid
-    else columns = 4;
-
-    const rows = Math.ceil(totalParticipants / columns);
-
-    return { columns, rows, totalParticipants };
+  // Calculate total participants - always display in a single row
+  const totalParticipants = useMemo(() => {
+    return agents.length + (moderator ? 1 : 0) + 1; // agents + moderator + participant
   }, [agents.length, moderator]);
 
   return (
-    <div className="w-full h-full flex items-center justify-center p-4 overflow-auto">
+    <div className="absolute inset-0 flex items-center justify-center">
       <motion.div
-        className="w-full h-full max-w-7xl mx-auto"
+        className="flex items-center justify-center gap-4"
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5, ease: 'easeOut' }}
       >
-        {/* Grid container - Zoom-like responsive grid */}
-        <div
-          className="grid gap-4 h-full w-full"
-          style={{
-            gridTemplateColumns: `repeat(${gridConfig.columns}, 1fr)`,
-            gridAutoRows: '1fr',
-          }}
-        >
-          {/* Moderator */}
-          {moderator && (() => {
+
+        {/* Moderator */}
+        {moderator && (() => {
             // Check if moderator has a valid heygenConfig
             const hasValidConfig = moderator.heygenConfig &&
               moderator.heygenConfig.avatarId &&
@@ -96,10 +73,10 @@ export default function VideoAvatarGrid({
                 </div>
               </motion.div>
             );
-          })()}
+        })()}
 
-          {/* Agents */}
-          {agents.map((agent, index) => {
+        {/* Agents */}
+        {agents.map((agent, index) => {
             console.log(`[VideoAvatarGrid] Agent ${index + 1}:`, {
               id: agent.id,
               name: agent.name,
@@ -128,51 +105,50 @@ export default function VideoAvatarGrid({
               avatarId: heygenConfig?.avatarId,
             });
 
-            return (
-              <motion.div
-                key={agent.id}
-                className="flex items-center justify-center"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{
-                  delay: 0.1 + (index + 1) * 0.08,
-                  duration: 0.4,
-                  type: 'spring',
-                  stiffness: 150,
-                }}
-              >
-                <div className="relative">
-                  <AvatarVideoPlayer
-                    agentId={agent.id}
-                    name={agent.name}
-                    heygenConfig={heygenConfig}
-                    isActive={currentSpeakerId === agent.id}
-                    fallbackColor={agent.avatarColor}
-                    size={140}
-                    voiceId={agent.voiceId}
-                  />
-                </div>
-              </motion.div>
-            );
-          })}
+          return (
+            <motion.div
+              key={agent.id}
+              className="flex items-center justify-center"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{
+                delay: 0.1 + (index + 1) * 0.08,
+                duration: 0.4,
+                type: 'spring',
+                stiffness: 150,
+              }}
+            >
+              <div className="relative">
+                <AvatarVideoPlayer
+                  agentId={agent.id}
+                  name={agent.name}
+                  heygenConfig={heygenConfig}
+                  isActive={currentSpeakerId === agent.id}
+                  fallbackColor={agent.avatarColor}
+                  size={140}
+                  voiceId={agent.voiceId}
+                />
+              </div>
+            </motion.div>
+          );
+        })}
 
-          {/* Participant (You) */}
-          <motion.div
-            className="flex items-center justify-center"
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.1 + (agents.length + 1) * 0.08, duration: 0.4 }}
-          >
-            <div className="relative">
-              <AnimatedBubble
-                name={participantName}
-                color="#3B82F6"
-                size={140}
-                isActive={currentSpeakerId === 'participant'}
-              />
-            </div>
-          </motion.div>
-        </div>
+        {/* Participant (You) */}
+        <motion.div
+          className="flex items-center justify-center"
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.1 + (agents.length + 1) * 0.08, duration: 0.4 }}
+        >
+          <div className="relative">
+            <AnimatedBubble
+              name={participantName}
+              color="#3B82F6"
+              size={140}
+              isActive={currentSpeakerId === 'participant'}
+            />
+          </div>
+        </motion.div>
       </motion.div>
 
       {/* Background gradient for depth */}
