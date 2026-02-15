@@ -1,14 +1,22 @@
 # Patronum - AI-Powered Cognitive Stimulation Therapy
 
 ## Inspiration
-Dementia affects over 55 million people worldwide, yet access to effective treatment remains deeply unequal. Cognitive Stimulation Therapy (CST) — a structured program of themed activities proven to improve memory, reasoning, and social engagement — is [most effective in group settings](https://pubmed.ncbi.nlm.nih.gov/34942157/). But for patients in rural or underserved areas, attending regular group sessions often means long, impractical travel. Meanwhile, family caregivers are stretched to their limits, reporting mental breakdowns, burnout, and zero time for themselves. We wanted to build something that bridges the access gap for patients while giving caregivers the visibility and breathing room they desperately need.
+Dementia affects over 55 million people worldwide, yet access to effective treatment remains deeply unequal. Cognitive Stimulation Therapy (CST) — a structured program of themed activities proven to improve memory, reasoning, and social engagement — is [most effective in group settings](https://pubmed.ncbi.nlm.nih.gov/34942157/). But for patients in rural or underserved areas, attending regular group sessions often means long, impractical travel. Meanwhile, family caregivers are stretched to their limits, reporting mental breakdowns, burnout, and zero time for themselves. We wanted to build something that bridges the access gap for patients while giving caregivers the visibility and breathing room they desperately need. 
+
+We also wanted to raise awareness for the incredibly difficult work that many caregivers go through, drawing inspiration from the stories shared in communities like r/dementia, where family members openly describe the emotional exhaustion, financial strain, role reversal, and constant uncertainty that come with caring for a loved one with cognitive decline—often while balancing jobs, parenting, and their own mental health, with little formal support. We noticed positive support of AI assisted therapy for dementia patients by caregivers on r/dementia and felt that a project like ours would be appropriate method for eliviating some of the stress that caregivers go through. 
+
 
 ## What it does
 Patronum is an intelligent platform that enables dementia patients to participate in simulated group CST sessions with humanlike AI participants and a moderator. Designed as a supplement to in-person therapy, it allows patients to engage in more frequent sessions at their own convenience. It has 4 main features:
 
-- **Simulated Group Sessions:** An AI moderator guides structured CST activities with up to 5 AI participants and the patient, preserving the social dynamics critical to CST's effectiveness
-- **Photo-Based Memory Stimulation:** Sessions incorporate family-uploaded photos and web-retrieved images, prompting participants to describe, interpret, and react to visual cues to strengthen recall and communication skills
-- **Caregiver Dashboard:** Caregivers can assign sessions, upload photos, and view an analytics dashboard with session summaries, engagement metrics, memory performance trends, and social interaction data
+- **Simulated Group Sessions:** An AI moderator guides structured CST activities with up to 5 AI participants and the patient, preserving the social dynamics critical to CST's effectiveness. To put it simply, we emulate a group therapy session with AI agents where patients are asked mentally stimulating questions that relate to reminisence and sensory experiences rather than factual recall. For example:
+
+    - What do you miss from your childhood?  
+    - What catalysts brings you back to your favorite memories? 
+
+- **Photo-Based Memory Stimulation:** Sessions incorporate family-uploaded photos and web-retrieved images, prompting participants to describe, interpret, and react to visual cues to strengthen recall and communication skills. We place emphasis on a style of learning called Error-Less Learning where patients are limited from the guilt of failures. In Error-Less Learning, patients always have access to the correct labels to questions and don't face test-like scenarios that emphasize errors made. 
+
+- **Caregiver Dashboard:** Caregivers can assign sessions, upload photos, and view an analytics dashboard with session summaries, engagement metrics, memory performance trends, and social interaction data. We provide research backed statistics and hope that caregivers can refer to the information we provide to track the progress of their patients. 
 - **Automated Alerts:** The system flags significant drops in engagement or cognitive performance across sessions, surfacing concerns early
 
 ### Additional features
