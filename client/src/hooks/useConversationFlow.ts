@@ -559,10 +559,12 @@ export const useConversationFlow = () => {
       const agentsWithVideo = agents.filter(agent => {
         const hasValidConfig = agent.id &&
           agent.heygenAvatarId &&
-          agent.heygenAvatarId.trim().length > 0;
+          agent.heygenAvatarId.trim().length > 0 &&
+          agent.heygenAvatarId !== 'default' && // Reject 'default' as invalid
+          agent.heygenAvatarId !== 'fallback-avatar-id'; // Reject fallback placeholder
 
         if (agent.id && !hasValidConfig) {
-          console.log(`[Conversation Flow]   ⏭️ Skipping ${agent.name} - no valid HeyGen avatar ID`);
+          console.log(`[Conversation Flow]   ⏭️ Skipping ${agent.name} - no valid HeyGen avatar ID (got: "${agent.heygenAvatarId || 'none'}")`);
         }
 
         return hasValidConfig;

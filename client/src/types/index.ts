@@ -268,7 +268,7 @@ export interface CSTTopic {
   title: string;
   description: string;
   category: 'nostalgia' | 'current-events' | 'personal' | 'creative' | 'discussion';
-  iconEmoji: string;
+  icon: string;
   backgroundColor: string;
 }
 

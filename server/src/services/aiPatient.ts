@@ -279,6 +279,23 @@ CRITICAL REQUIREMENTS:
   return slicedProfiles;
 };
 
+// Available conversational voice IDs (variety based on personality)
+const AVAILABLE_VOICES = [
+  'mary_voice_en',      // Bella - soft, calm female
+  'robert_voice_en',    // Rajesh Patel - Indian male voice
+  'susan_voice_en',     // Dorothy - gentle, mature female
+  'james_voice_en',     // Josh - deep, laid-back male
+  'patricia_voice_en',  // Elli - caring, emotional female
+  'margaret_chen_voice', // Asian female voice
+];
+
+/**
+ * Assign a voice ID based on index (cycles through available voices for variety)
+ */
+const assignVoiceId = (index: number): string => {
+  return AVAILABLE_VOICES[index % AVAILABLE_VOICES.length];
+};
+
 /**
  * Generate a single agent from a profile
  */
@@ -290,6 +307,10 @@ const generateSingleAgentFromProfile = async (
 ): Promise<any> => {
   console.log(`[AI Patient] Generating agent ${index + 1}: ${profile.name} with trait: "${profile.trait}"`);
 
+  // Assign a varied voice ID based on index
+  const voiceId = assignVoiceId(index);
+  console.log(`[AI Patient] Assigned voice: ${voiceId} (index ${index})`);
+
   const prompt = `Create ONE agent personality for a supportive group conversation about "${topic}".
 
 REQUIRED NAME: ${profile.name} (you MUST use this exact name)
@@ -298,6 +319,8 @@ Personality trait: ${profile.trait}
 Create an agent with:
 - Name: ${profile.name} (MUST use this exact name)
 - Age: 60-75
+- Gender: male or female (infer from the name)
+- Ethnicity: Caucasian, Asian, African, Hispanic, or Middle Eastern (infer from the name)
 - Background: retired profession, hometown, family, interests (should match the name's cultural background)
 - Personality: speaking style, quirks that reflect the trait
 
@@ -305,6 +328,8 @@ Respond with ONLY this JSON object:
 {
   "name": "${profile.name}",
   "age": 68,
+  "gender": "male",
+  "ethnicity": "Caucasian",
   "background": {
     "occupation": "Retired profession",
     "hometown": "City, State",
@@ -317,7 +342,7 @@ Respond with ONLY this JSON object:
     "quirks": ["Quirk1", "Quirk2"]
   },
   "avatarColor": "${color}",
-  "voiceId": "generated_voice_id"
+  "voiceId": "${voiceId}"
 }`;
 
   const message = await anthropic.messages.create({
@@ -331,7 +356,10 @@ Respond with ONLY this JSON object:
   const cleanedText = stripMarkdownCodeFences(responseText);
   const agent = JSON.parse(cleanedText);
 
-  console.log(`[AI Patient] ✓ Generated agent ${index + 1}: ${agent.name}`);
+  // Ensure the voice ID is set correctly (in case AI doesn't include it)
+  agent.voiceId = voiceId;
+
+  console.log(`[AI Patient] ✓ Generated agent ${index + 1}: ${agent.name} with voice ${voiceId}`);
   return agent;
 };
 

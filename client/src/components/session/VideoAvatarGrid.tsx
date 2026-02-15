@@ -83,6 +83,7 @@ export default function VideoAvatarGrid({
                       isActive={currentSpeakerId === moderator.id}
                       fallbackColor={moderator.color}
                       size={140}
+                      voiceId="moderator_voice"
                     />
                   ) : (
                     <AnimatedBubble
@@ -99,6 +100,15 @@ export default function VideoAvatarGrid({
 
           {/* Agents */}
           {agents.map((agent, index) => {
+            console.log(`[VideoAvatarGrid] Agent ${index + 1}:`, {
+              id: agent.id,
+              name: agent.name,
+              heygenAvatarId: agent.heygenAvatarId,
+              hasHeygenConfig: !!agent.heygenConfig,
+              heygenConfigType: typeof agent.heygenConfig,
+              heygenConfigAvatarId: agent.heygenConfig?.avatarId,
+            });
+
             // Create a basic heygenConfig if agent has heygenAvatarId but no full config
             const heygenConfig = agent.heygenConfig || (agent.heygenAvatarId ? {
               avatarId: agent.heygenAvatarId,
@@ -112,6 +122,11 @@ export default function VideoAvatarGrid({
               createdAt: new Date().toISOString(),
               lastUsed: new Date().toISOString()
             } : undefined);
+
+            console.log(`[VideoAvatarGrid] Using heygenConfig for ${agent.name}:`, {
+              hasConfig: !!heygenConfig,
+              avatarId: heygenConfig?.avatarId,
+            });
 
             return (
               <motion.div
@@ -134,6 +149,7 @@ export default function VideoAvatarGrid({
                     isActive={currentSpeakerId === agent.id}
                     fallbackColor={agent.avatarColor}
                     size={140}
+                    voiceId={agent.voiceId}
                   />
                 </div>
               </motion.div>

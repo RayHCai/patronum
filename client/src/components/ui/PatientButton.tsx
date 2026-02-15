@@ -23,7 +23,16 @@ export default function PatientButton({
   type = 'button',
   fullWidth = false,
 }: PatientButtonProps) {
-  const baseClass = size === 'large' ? 'patient-button-primary' : 'patient-button-secondary';
+  // Determine the button class based on variant and size
+  const getButtonClass = () => {
+    if (variant === 'primary') {
+      return size === 'large' ? 'patient-button-primary' : 'patient-button-primary-medium';
+    } else {
+      return size === 'large' ? 'patient-button-secondary-large' : 'patient-button-secondary';
+    }
+  };
+
+  const baseClass = getButtonClass();
   const className = `${baseClass} ${fullWidth ? 'w-full' : ''}`;
 
   return (

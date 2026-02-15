@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { useConversationStore } from '../stores/conversationStore';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useAudioPlayback } from '../hooks/useAudioPlayback';
@@ -10,7 +10,7 @@ import { useMicrophone } from '../hooks/useMicrophone';
 import { useConversationFlow } from '../hooks/useConversationFlow';
 import { usePatient } from '../contexts/PatientContext';
 import MicrophoneBar from '../components/session/MicrophoneBar';
-import AnimatedBubble from '../components/session/AnimatedBubble';
+import VideoAvatarGrid from '../components/session/VideoAvatarGrid';
 import GameChoiceScreen from '../components/session/GameChoiceScreen';
 import CognitiveGame from '../components/session/CognitiveGame';
 import { GameAnswer } from '../types/cognitiveGame';
@@ -148,6 +148,23 @@ export default function Session() {
       console.log('[Session] Session ID:', payload.sessionId);
       console.log('[Session] Topic:', payload.topic);
       console.log('[Session] Agents count:', payload.agents?.length || agents.length);
+
+      // Log detailed agent info
+      console.log('[Session] ==========================================');
+      console.log('[Session] RECEIVED AGENTS DETAILS');
+      console.log('[Session] ==========================================');
+      payload.agents?.forEach((agent: any, index: number) => {
+        console.log(`[Session] Agent ${index + 1}:`, {
+          id: agent.id,
+          name: agent.name,
+          heygenAvatarId: agent.heygenAvatarId,
+          hasHeygenConfig: !!agent.heygenConfig,
+          heygenConfigType: typeof agent.heygenConfig,
+          heygenConfigAvatarId: agent.heygenConfig?.avatarId,
+          heygenConfigKeys: agent.heygenConfig ? Object.keys(agent.heygenConfig) : [],
+          fullHeygenConfig: agent.heygenConfig,
+        });
+      });
 
       // Loading is already true from initial state
       // Keep showing loading until first audio is ready
@@ -628,19 +645,6 @@ export default function Session() {
     sendMessage({ type: 'session_end', payload: { sessionId } });
   };
 
-  // Loading screen
-  if (isLoading) {
-    return (
-      <LoadingScreen
-        mode="fullscreen"
-        size="large"
-        message={loadingMessage || 'Loading...'}
-        subtitle="This will just take a moment"
-        backgroundType="neural"
-      />
-    );
-  }
-
   // Debug: Log render state
   console.log('[Session] Rendering with state:', {
     isLoading,
@@ -662,6 +666,18 @@ export default function Session() {
 
   return (
     <div className="h-screen flex flex-col bg-[var(--color-bg-primary)] relative">
+      {/* Loading screen overlay - renders ON TOP so avatars can initialize in background */}
+      {isLoading && (
+        <div className="absolute inset-0 z-50">
+          <LoadingScreen
+            mode="fullscreen"
+            size="large"
+            message={loadingMessage || 'Loading...'}
+            subtitle="This will just take a moment"
+            backgroundType="neural"
+          />
+        </div>
+      )}
       {/* Soft gradient background - matching landing page */}
       <div className="absolute inset-0 bg-gradient-to-br from-red-50/30 via-white to-red-50/20 pointer-events-none" />
 
@@ -695,68 +711,18 @@ export default function Session() {
         </button>
       </header>
 
-      {/* Main Content - Avatar Bubbles in Horizontal Line */}
+      {/* Main Content - Video Avatar Grid with HeyGen */}
       <div className="relative z-10 flex-1 overflow-hidden">
-        <div className="w-full h-full flex items-center justify-center p-8">
-          <div className="flex items-center gap-12">
-            {/* Moderator Bubble */}
-            <motion.div
-              className="flex flex-col items-center gap-3"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1, duration: 0.5 }}
-            >
-              <AnimatedBubble
-                name="Maya"
-                color="#8B0000"
-                size={120}
-                isActive={currentSpeakerId === 'moderator'}
-              />
-              <span className="text-sm font-medium text-gray-600" style={{ fontFamily: 'var(--font-sans)' }}>
-                Moderator
-              </span>
-            </motion.div>
-
-            {/* Agent Bubbles */}
-            {activeAgents.map((agent, index) => (
-              <motion.div
-                key={agent.id}
-                className="flex flex-col items-center gap-3"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 + index * 0.1, duration: 0.5 }}
-              >
-                <AnimatedBubble
-                  name={agent.name}
-                  color={agent.avatarColor || '#6366f1'}
-                  size={120}
-                  isActive={currentSpeakerId === agent.id}
-                />
-                <span className="text-sm font-medium text-gray-600" style={{ fontFamily: 'var(--font-sans)' }}>
-                  {agent.name}
-                </span>
-              </motion.div>
-            ))}
-
-            {/* User Bubble */}
-            <motion.div
-              className="flex flex-col items-center gap-3"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 + activeAgents.length * 0.1, duration: 0.5 }}
-            >
-              <AnimatedBubble
-                name={participant.name || 'You'}
-                color="#4B5563"
-                size={120}
-                isActive={currentSpeakerId === 'participant' || isListening}
-              />
-              <span className="text-sm font-medium text-gray-600" style={{ fontFamily: 'var(--font-sans)' }}>
-                You
-              </span>
-            </motion.div>
-          </div>
-        </div>
+        <VideoAvatarGrid
+          agents={activeAgents}
+          participantName={participant.name || 'You'}
+          currentSpeakerId={currentSpeakerId}
+          moderator={{
+            id: 'moderator',
+            name: 'Maya',
+            color: '#8B0000',
+          }}
+        />
       </div>
 
       {/* Subtitle Display */}

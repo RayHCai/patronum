@@ -14,6 +14,7 @@ interface AvatarVideoPlayerProps {
   isActive: boolean;
   fallbackColor: string;
   size?: number;
+  voiceId?: string; // ElevenLabs voice ID for hybrid audio (11Labs + HeyGen)
   onVideoReady?: () => void;
   onVideoError?: (error: Error) => void;
 }
@@ -25,6 +26,7 @@ export default function AvatarVideoPlayer({
   isActive,
   fallbackColor,
   size = 120,
+  voiceId,
   onVideoReady,
   onVideoError,
 }: AvatarVideoPlayerProps) {
@@ -35,6 +37,14 @@ export default function AvatarVideoPlayer({
   const setVideoInitialized = useConversationStore(state => state.setVideoInitialized);
 
   const isStreamActive = activeStreams.has(agentId);
+
+  console.log(`[AvatarVideoPlayer] ${name} - Stream status:`, {
+    isStreamActive,
+    agentId,
+    hasHeygenConfig: !!heygenConfig,
+    avatarId: heygenConfig?.avatarId,
+    activeStreamsSize: activeStreams.size,
+  });
 
   // Only initialize HeyGen if stream is marked as active in store
   const {
@@ -83,33 +93,47 @@ export default function AvatarVideoPlayer({
     // Only initialize if we have a valid heygenConfig with avatarId
     const hasValidConfig = heygenConfig && heygenConfig.avatarId && heygenConfig.avatarId.trim().length > 0;
 
+    console.log(`[AvatarVideoPlayer] ${name} - Initialization check:`, {
+      isStreamActive,
+      isInitialized,
+      isLoading,
+      hasError: !!error,
+      hasValidConfig,
+      willInitialize: isStreamActive && !isInitialized && !isLoading && !error && hasValidConfig,
+    });
+
     if (isStreamActive && !isInitialized && !isLoading && !error && hasValidConfig) {
-      console.log(`[AvatarVideoPlayer] Initializing video for ${name}`);
+      console.log(`[AvatarVideoPlayer] ✅ Initializing video for ${name}`);
       initialize();
     } else if (isStreamActive && !hasValidConfig) {
-      console.warn(`[AvatarVideoPlayer] Stream marked active for ${name} but no valid HeyGen config - skipping initialization`);
-      // Mark as initialized (with error) to prevent infinite loops
-      // We set it to false, but we need to ensure we don't loop. 
-      // Since isStreamActive is true, and we are not initializing, this branch would run again if dependencies change.
-      // But now 'store' is not a dependency. 'setVideoInitialized' is stable.
-      // So this effect will NOT run again just because we called setVideoInitialized.
+      console.warn(`[AvatarVideoPlayer] ⚠️ Stream marked active for ${name} but no valid HeyGen config - skipping initialization`);
       setVideoInitialized(agentId, false);
+    } else if (!isStreamActive) {
+      console.log(`[AvatarVideoPlayer] ⏸️ ${name} - Stream not active yet, waiting...`);
     }
   }, [isStreamActive, isInitialized, isLoading, error, initialize, name, heygenConfig, agentId, setVideoInitialized]);
 
-  // Register with avatar manager when initialized
+  // Register with avatar manager when initialized (with voiceId for hybrid audio)
   useEffect(() => {
     if (isInitialized) {
-      avatarManager.register(agentId, { agentId, speak, stop });
+      avatarManager.register(agentId, { agentId, speak, stop, voiceId });
       return () => {
         avatarManager.unregister(agentId);
       };
     }
-  }, [isInitialized, agentId, speak, stop]);
+  }, [isInitialized, agentId, speak, stop, voiceId]);
 
   // Decide whether to show video or fallback bubble
   const showVideo = isInitialized && stream && !error;
   const showBubble = !heygenConfig || error || !isStreamActive || !isInitialized;
+
+  console.log(`[AvatarVideoPlayer] ${name} - Render decision:`, {
+    isInitialized,
+    hasStream: !!stream,
+    hasError: !!error,
+    showVideo,
+    showBubble,
+  });
 
   return (
     <motion.div
@@ -126,22 +150,24 @@ export default function AvatarVideoPlayer({
         stiffness: 200,
       }}
     >
-      {/* Video Element */}
-      {showVideo && (
-        <div className="relative w-full h-full rounded-full overflow-hidden">
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted={false}
-            className="w-full h-full object-cover"
-            style={{
-              transform: 'scaleX(-1)', // Mirror video for natural appearance
-            }}
-          />
+      {/* Video Element - ALWAYS rendered so videoRef exists for HeyGen */}
+      <div
+        className="relative w-full h-full rounded-full overflow-hidden"
+        style={{ display: showVideo ? 'block' : 'none' }}
+      >
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted={false}
+          className="w-full h-full object-cover"
+          style={{
+            transform: 'scaleX(-1)', // Mirror video for natural appearance
+          }}
+        />
 
-          {/* Active Speaker Ring */}
-          {isActive && (
+        {/* Active Speaker Ring */}
+        {showVideo && isActive && (
             <motion.div
               className="absolute inset-0 rounded-full border-4 border-blue-400"
               initial={{ opacity: 0, scale: 0.95 }}
@@ -164,7 +190,6 @@ export default function AvatarVideoPlayer({
             </p>
           </div>
         </div>
-      )}
 
       {/* Fallback: Animated Bubble */}
       {showBubble && (

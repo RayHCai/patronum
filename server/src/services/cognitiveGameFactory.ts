@@ -1,13 +1,13 @@
 // Cognitive Game Factory
 // Generates different types of cognitive games for dementia patients
 import { anthropic, stripMarkdownCodeFences } from './claude';
-import { prisma } from '../index';
+import { prisma } from '../prisma/client';
 
 // ========================================
 // Types
 // ========================================
 
-export type GameType = 'memory_recall' | 'pattern_recognition' | 'word_association' | 'image_matching';
+export type GameType = 'memory_recall' | 'pattern_recognition' | 'image_matching';
 
 export interface GameQuestion {
   id: string;
@@ -60,6 +60,9 @@ export const generateCognitiveGame = async (
   gameType: GameType,
   questionCount: number
 ): Promise<GameQuestion[]> => {
+  console.log(`[Cognitive Game Factory] Starting game generation for session ${sessionId}`);
+  console.log(`[Cognitive Game Factory] Game type: ${gameType}, Question count: ${questionCount}`);
+
   // Fetch session with turns and agents
   const session = await prisma.session.findUnique({
     where: { id: sessionId },
@@ -76,11 +79,22 @@ export const generateCognitiveGame = async (
   });
 
   if (!session) {
+    console.error(`[Cognitive Game Factory] Session ${sessionId} not found`);
     throw new Error(`Session ${sessionId} not found`);
   }
 
+  console.log(`[Cognitive Game Factory] Session found: ${session.id}`);
+  console.log(`[Cognitive Game Factory] Turn count: ${session.turns.length}`);
+  console.log(`[Cognitive Game Factory] Participant: ${session.participant.name}`);
+  console.log(`[Cognitive Game Factory] Agent count: ${session.participant.agents.length}`);
+
   // Get agents from participant
   const agents = session.participant.agents;
+
+  if (!agents || agents.length === 0) {
+    console.error(`[Cognitive Game Factory] No agents found for participant ${session.participant.id}`);
+    throw new Error('No agents available for game generation. Please ensure agents were created for this session.');
+  }
 
   const sessionData: SessionData = {
     id: session.id,
@@ -99,8 +113,6 @@ export const generateCognitiveGame = async (
       return generateMemoryRecallQuestions(sessionData, questionCount);
     case 'pattern_recognition':
       return generatePatternRecognitionQuestions(sessionData, questionCount);
-    case 'word_association':
-      return generateWordAssociationQuestions(sessionData, questionCount);
     case 'image_matching':
       return generateImageMatchingQuestions(sessionData, questionCount);
     default:
@@ -349,6 +361,7 @@ RESPONSE FORMAT (JSON only):
 /**
  * Image Matching Game: "Picture This"
  * Match images to conversation topics
+ * Using Unsplash placeholder images for now
  */
 async function generateImageMatchingQuestions(
   session: SessionData,
@@ -368,13 +381,37 @@ async function generateImageMatchingQuestions(
     category = 'travel';
   }
 
-  // Define image library (these should exist in /public/game-images/)
-  const imageLibrary: Record<string, string[]> = {
-    food: ['kitchen', 'baking', 'dinner-table', 'recipe-book'],
-    family: ['family-gathering', 'playing-games', 'photo-album'],
-    nature: ['garden', 'park', 'flowers', 'trees'],
-    hobbies: ['knitting', 'painting', 'reading', 'puzzles'],
-    travel: ['beach', 'mountains', 'city', 'countryside']
+  // Define image library with Unsplash search terms
+  const imageLibrary: Record<string, Array<{ term: string; label: string }>> = {
+    food: [
+      { term: 'kitchen-cooking', label: 'Kitchen' },
+      { term: 'baking-cookies', label: 'Baking' },
+      { term: 'family-dinner', label: 'Dinner Table' },
+      { term: 'recipe-book', label: 'Recipe Book' }
+    ],
+    family: [
+      { term: 'family-gathering', label: 'Family Gathering' },
+      { term: 'board-games', label: 'Playing Games' },
+      { term: 'photo-album', label: 'Photo Album' }
+    ],
+    nature: [
+      { term: 'garden-flowers', label: 'Garden' },
+      { term: 'park-bench', label: 'Park' },
+      { term: 'colorful-flowers', label: 'Flowers' },
+      { term: 'green-trees', label: 'Trees' }
+    ],
+    hobbies: [
+      { term: 'knitting-yarn', label: 'Knitting' },
+      { term: 'painting-art', label: 'Painting' },
+      { term: 'reading-book', label: 'Reading' },
+      { term: 'jigsaw-puzzle', label: 'Puzzles' }
+    ],
+    travel: [
+      { term: 'beach-ocean', label: 'Beach' },
+      { term: 'mountains-landscape', label: 'Mountains' },
+      { term: 'city-skyline', label: 'City' },
+      { term: 'countryside-farm', label: 'Countryside' }
+    ]
   };
 
   const availableImages = imageLibrary[category] || imageLibrary['family'];
@@ -383,38 +420,51 @@ async function generateImageMatchingQuestions(
   const questions: GameQuestion[] = [];
   for (let i = 0; i < count; i++) {
     // Pick a correct image
-    const correctImageName = availableImages[i % availableImages.length];
+    const correctImage = availableImages[i % availableImages.length];
 
     // Pick 2 distractor images from other categories
     const otherCategories = Object.keys(imageLibrary).filter(c => c !== category);
-    const distractorCategory1 = otherCategories[0];
-    const distractorCategory2 = otherCategories[1] || otherCategories[0];
+    const distractorCategory1 = otherCategories[Math.floor(Math.random() * otherCategories.length)];
+    const distractorCategory2 = otherCategories.filter(c => c !== distractorCategory1)[0] || distractorCategory1;
 
     const distractor1 = imageLibrary[distractorCategory1][0];
     const distractor2 = imageLibrary[distractorCategory2][0];
+
+    // Shuffle options - using Picsum Photos for reliable placeholder images
+    // Each image gets a unique seed based on the term to ensure consistency
+    const getImageSeed = (term: string) => {
+      let hash = 0;
+      for (let i = 0; i < term.length; i++) {
+        hash = ((hash << 5) - hash) + term.charCodeAt(i);
+        hash = hash & hash;
+      }
+      return Math.abs(hash);
+    };
+
+    const options = [
+      {
+        id: 'opt_1',
+        imageUrl: `https://picsum.photos/seed/${getImageSeed(correctImage.term)}/400/300`,
+        label: correctImage.label
+      },
+      {
+        id: 'opt_2',
+        imageUrl: `https://picsum.photos/seed/${getImageSeed(distractor1.term)}/400/300`,
+        label: distractor1.label
+      },
+      {
+        id: 'opt_3',
+        imageUrl: `https://picsum.photos/seed/${getImageSeed(distractor2.term)}/400/300`,
+        label: distractor2.label
+      }
+    ].sort(() => Math.random() - 0.5); // Randomize order
 
     questions.push({
       id: `image_${i + 1}`,
       type: 'image_matching',
       question: `We talked about ${session.topic || 'something special'} today. Which image matches what we discussed?`,
-      options: [
-        {
-          id: 'opt_1',
-          imageUrl: `/game-images/${category}/${correctImageName}.jpg`,
-          label: formatImageLabel(correctImageName)
-        },
-        {
-          id: 'opt_2',
-          imageUrl: `/game-images/${distractorCategory1}/${distractor1}.jpg`,
-          label: formatImageLabel(distractor1)
-        },
-        {
-          id: 'opt_3',
-          imageUrl: `/game-images/${distractorCategory2}/${distractor2}.jpg`,
-          label: formatImageLabel(distractor2)
-        }
-      ],
-      correctAnswer: formatImageLabel(correctImageName),
+      options,
+      correctAnswer: correctImage.label,
       hint: `Think about the main topic we discussed`
     });
   }
