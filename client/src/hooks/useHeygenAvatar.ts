@@ -91,23 +91,27 @@ export function useHeygenAvatar(options: UseHeygenAvatarOptions): UseHeygenAvata
         console.log(`[HeyGen Avatar ${agentId}] Stopped talking`);
       });
 
-      avatar.on(StreamingEvents.STREAM_READY, (event) => {
+      avatar.on(StreamingEvents.STREAM_READY, (event: any) => {
         console.log(`[HeyGen Avatar ${agentId}] Stream ready`);
+
+        // HeyGen sends the stream in event.detail (CustomEvent pattern)
+        const stream = event.detail || event.stream;
+
         console.log(`[HeyGen Avatar ${agentId}] Stream details:`, {
-          hasEventStream: !!event.stream,
+          hasStream: !!stream,
           hasVideoRef: !!videoRef.current,
-          streamId: event.stream?.id,
-          streamActive: event.stream?.active,
-          streamTracks: event.stream?.getTracks?.().length,
+          streamId: stream?.id,
+          streamActive: stream?.active,
+          streamTracks: stream?.getTracks?.().length,
         });
 
-        if (event.stream && videoRef.current) {
+        if (stream && videoRef.current) {
           console.log(`[HeyGen Avatar ${agentId}] ✅ Attaching stream to video element`);
-          videoRef.current.srcObject = event.stream;
-          setStream(event.stream);
+          videoRef.current.srcObject = stream;
+          setStream(stream);
         } else {
           console.warn(`[HeyGen Avatar ${agentId}] ⚠️ Cannot attach stream:`, {
-            hasStream: !!event.stream,
+            hasStream: !!stream,
             hasVideoRef: !!videoRef.current,
           });
         }
@@ -119,10 +123,23 @@ export function useHeygenAvatar(options: UseHeygenAvatarOptions): UseHeygenAvata
         setIsInitialized(false);
       });
 
+      // Listen for any errors or connection issues
+      avatar.on('error' as any, (error: any) => {
+        console.error(`[HeyGen Avatar ${agentId}] SDK Error:`, error);
+      });
+
+      avatar.on('ice-connection-state-change' as any, (state: any) => {
+        console.log(`[HeyGen Avatar ${agentId}] ICE Connection State:`, state);
+      });
+
+      avatar.on('connection-state-change' as any, (state: any) => {
+        console.log(`[HeyGen Avatar ${agentId}] Connection State:`, state);
+      });
+
       // 4. Create avatar session
       await avatar.createStartAvatar({
         avatarName: avatarId || heygenConfig?.avatarId || '',
-        quality: AvatarQuality.Medium,
+        quality: AvatarQuality.High,
         voice: {
           rate: 1.0,
           emotion: 'Friendly',

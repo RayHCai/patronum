@@ -41,25 +41,19 @@ router.post('/start', async (req, res, next) => {
 
     console.log(`[Cognitive Game] Session ${sessionId} has ${turnCount} turns, generating ${questionCount} questions`);
 
-    // Random game type selection
-    const GAME_TYPES: GameType[] = [
-      'memory_recall',
-      'pattern_recognition',
-      'image_matching'
-    ];
-
-    const randomGameType = GAME_TYPES[Math.floor(Math.random() * GAME_TYPES.length)];
-    console.log(`[Cognitive Game] Randomly selected game type: ${randomGameType}`);
+    // Always use memory_recall game type (quiz about the conversation)
+    const gameType: GameType = 'memory_recall';
+    console.log(`[Cognitive Game] Using game type: ${gameType} (conversation quiz)`);
 
     // Generate questions
-    console.log(`[Cognitive Game] Calling generateCognitiveGame with sessionId: ${sessionId}, gameType: ${randomGameType}, count: ${questionCount}`);
-    const questions = await generateCognitiveGame(sessionId, randomGameType, questionCount);
+    console.log(`[Cognitive Game] Calling generateCognitiveGame with sessionId: ${sessionId}, gameType: ${gameType}, count: ${questionCount}`);
+    const questions = await generateCognitiveGame(sessionId, gameType, questionCount);
     console.log(`[Cognitive Game] Successfully generated ${questions.length} questions`);
 
     res.status(200).json({
       success: true,
       data: {
-        gameType: randomGameType,
+        gameType,
         questionCount,
         questions
       }

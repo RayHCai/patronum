@@ -150,10 +150,34 @@ export const useConversationFlow = () => {
 
         let nextNextIndex: number;
 
+        // CRITICAL: Validate that next speaker is NOT the same as current speaker
+        const validateNotSameSpeaker = (proposedIndex: number): number => {
+          if (proposedIndex === nextIndex) {
+            console.log(`[Conversation Flow] ⚠️ TURN VIOLATION PREVENTED: Speaker ${nextIndex} cannot speak twice in a row`);
+            // Move to next speaker in sequence
+            let validIndex = proposedIndex + 1;
+            if (validIndex >= speakerIndices.length) {
+              validIndex = 0; // Wrap to moderator
+            }
+            // If still same speaker (shouldn't happen), keep incrementing
+            while (validIndex === nextIndex && validIndex < speakerIndices.length) {
+              validIndex++;
+            }
+            // If we wrapped around and still hit same speaker, go to user or moderator
+            if (validIndex === nextIndex) {
+              validIndex = nextIndex === 1 ? 0 : 1;
+            }
+            const redirectedSpeaker = speakerIndices.find(s => s.index === validIndex);
+            console.log(`[Conversation Flow] ✅ Redirected to speaker ${validIndex} (${redirectedSpeaker?.name}) instead`);
+            return validIndex;
+          }
+          return proposedIndex;
+        };
+
         // If server explicitly said to return to user (agent speaking)
         if (returnToUser === true) {
-          nextNextIndex = 1; // User index
-          console.log(`[Conversation Flow] 🎯 Server says returnToUser=true → routing to user (index 1)`);
+          nextNextIndex = validateNotSameSpeaker(1); // User index
+          console.log(`[Conversation Flow] 🎯 Server says returnToUser=true → routing to user (index ${nextNextIndex})`);
           // Increment the user return counter
           store.incrementUserReturnCounter();
           console.log(`[Conversation Flow] User return counter incremented`);
@@ -169,6 +193,8 @@ export const useConversationFlow = () => {
             nextNextIndex = 2; // Go to first agent instead
             console.log(`[Conversation Flow] Overriding user routing → going to first agent (index 2)`);
           }
+          // CRITICAL: Validate not routing to same speaker
+          nextNextIndex = validateNotSameSpeaker(nextNextIndex);
         } else {
           // No returnToUser flag (moderator or cached response) - use normal logic
           console.log(`[Conversation Flow] No returnToUser flag - using normal speaker determination`);
@@ -194,14 +220,17 @@ export const useConversationFlow = () => {
           if (nextIndex === 0 && text.includes('?') && !agentMentioned &&
             (text.toLowerCase().includes('you') || text.toLowerCase().includes('your'))) {
             // Moderator is asking the user a question - go to user
-            nextNextIndex = 1;
-            console.log(`[Conversation Flow] 🎤 Moderator asked user a question → routing to user (index 1)`);
+            nextNextIndex = validateNotSameSpeaker(1);
+            console.log(`[Conversation Flow] 🎤 Moderator asked user a question → routing to user (index ${nextNextIndex})`);
             // Increment counter since we're going to user
             store.incrementUserReturnCounter();
           } else {
             // Normal turn - use speaker determination logic
             console.log(`[Conversation Flow] 🎲 Running speaker determination logic...`);
             nextNextIndex = determineNextSpeaker(nextIndex, text);
+
+            // CRITICAL: Validate not routing to same speaker
+            nextNextIndex = validateNotSameSpeaker(nextNextIndex);
 
             // If we're routing to user, increment counter; otherwise reset
             if (nextNextIndex === 1) {
@@ -259,24 +288,28 @@ export const useConversationFlow = () => {
         console.log(`[Conversation Flow] 📊 Updating phase based on turn count: ${currentTurnCount}`);
         store.updatePhase(currentTurnCount + 1);
 
-        // Touch video stream to keep it alive (if agent with video)
-        if (speaker.agentId && speaker.type === 'agent') {
-          console.log(`[Conversation Flow] 🎥 Touching video stream for ${speaker.name}`);
-          touchStream(speaker.agentId);
+        // Touch video stream to keep it alive (if agent or moderator with video)
+        const avatarId = speaker.type === 'moderator' ? 'moderator' : speaker.agentId;
+        if (avatarId && (speaker.type === 'agent' || speaker.type === 'moderator')) {
+          console.log(`[Conversation Flow] 🎥 Touching video stream for ${speaker.name} (${speaker.type})`);
+          if (speaker.agentId) {
+            touchStream(speaker.agentId);
+          }
 
           // Trigger HeyGen avatar to speak with lip-sync to audio
           // Check if avatar is registered, and wait briefly if not
           const maxWaitTime = 3000; // 3 seconds max wait
           const startWaitTime = Date.now();
           const waitForAvatar = async () => {
-            while (!avatarManager.has(speaker.agentId!) && (Date.now() - startWaitTime) < maxWaitTime) {
+            while (!avatarManager.has(avatarId) && (Date.now() - startWaitTime) < maxWaitTime) {
               console.log(`[Conversation Flow] ⏳ Waiting for avatar ${speaker.name} to register...`);
               await new Promise(resolve => setTimeout(resolve, 200)); // Wait 200ms
             }
 
-            if (avatarManager.has(speaker.agentId!)) {
-              console.log(`[Conversation Flow] 🎬 Triggering HeyGen avatar speech for ${speaker.name}`);
-              await avatarManager.speak(speaker.agentId!, text, audioUrl);
+            if (avatarManager.has(avatarId)) {
+              console.log(`[Conversation Flow] 🎬 Triggering HeyGen avatar speech for ${speaker.name} (${speaker.type})`);
+              // Pass voiceId (not audioUrl) so avatarManager generates a public URL for HeyGen
+              await avatarManager.speak(avatarId, text, speaker.voiceId);
             } else {
               console.warn(`[Conversation Flow] ⚠️ Avatar ${speaker.name} not ready after ${maxWaitTime}ms, skipping video speech`);
             }
@@ -553,8 +586,13 @@ export const useConversationFlow = () => {
       console.log('[Conversation Flow] 📊 Setting initial conversation phase...');
       store.updatePhase(0);
 
-      // Initialize all agent video streams at session start
-      console.log('[Conversation Flow] 🎥 Initializing video streams for all agents...');
+      // Initialize moderator and agent video streams at session start
+      console.log('[Conversation Flow] 🎥 Initializing video streams for moderator and agents...');
+
+      // Initialize moderator video stream first
+      console.log('[Conversation Flow]   📹 Initializing moderator video stream...');
+      await initializeStream('moderator');
+
       // Filter agents that have BOTH an ID and a valid (non-empty) heygenAvatarId
       const agentsWithVideo = agents.filter(agent => {
         const hasValidConfig = agent.id &&
@@ -571,7 +609,7 @@ export const useConversationFlow = () => {
       });
 
       if (agentsWithVideo.length > 0) {
-        // Initialize all streams
+        // Initialize all agent streams
         onLoadingProgress?.('Connecting to video avatars...');
         for (const agent of agentsWithVideo) {
           console.log(`[Conversation Flow]   📹 Initializing video stream for ${agent.name} (${agent.id})`);

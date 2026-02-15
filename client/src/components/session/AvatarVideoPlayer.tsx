@@ -159,7 +159,7 @@ export default function AvatarVideoPlayer({
           ref={videoRef}
           autoPlay
           playsInline
-          muted={false}
+          muted={true}
           className="w-full h-full object-cover"
           style={{
             transform: 'scaleX(-1)', // Mirror video for natural appearance

@@ -1,6 +1,36 @@
-// Game Choice Screen - Asks patient if they want to play a memory game
+// Game Choice Screen - Asks patient if they want to play a quiz about the conversation
 import { motion } from 'framer-motion';
+import { Sparkles, Clock } from 'lucide-react';
 import PatientButton from '../ui/PatientButton';
+
+// Animation variants matching landing page
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08,
+      delayChildren: 0.15
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: {
+    opacity: 0,
+    y: 12,
+    filter: 'blur(6px)'
+  },
+  visible: {
+    opacity: 1,
+    y: 0,
+    filter: 'blur(0px)',
+    transition: {
+      duration: 0.45,
+      ease: [0.34, 1.56, 0.64, 1]
+    }
+  }
+};
 
 interface GameChoiceScreenProps {
   onYes: () => void;
@@ -15,52 +45,73 @@ export default function GameChoiceScreen({ onYes, onNo }: GameChoiceScreenProps)
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-[var(--color-bg-primary)] z-50 flex items-center justify-center"
+      className="fixed inset-0 bg-[var(--color-bg-primary)] z-50 flex items-center justify-center overflow-hidden"
       style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }}
     >
-      {/* Gradient overlay matching home page */}
+      {/* Gradient overlay matching landing page */}
       <div className="absolute inset-0 bg-gradient-to-br from-red-50/30 via-white to-red-50/20 pointer-events-none" />
 
       <motion.div
-        initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: 'easeOut' }}
-        className="relative z-10 text-center max-w-2xl px-8"
+        initial="hidden"
+        animate="visible"
+        variants={containerVariants}
+        className="relative z-10 text-center max-w-4xl px-8"
       >
-        {/* Friendly illustration */}
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-          className="text-9xl mb-8"
-        >
-          🎮
-        </motion.div>
-
         {/* Main text */}
-        <h1
-          style={{ fontFamily: 'var(--font-serif)' }}
-          className="text-5xl font-semibold text-[var(--color-text-primary)] mb-6 tracking-tight"
+        <motion.h1
+          variants={itemVariants}
+          className="text-6xl sm:text-7xl font-semibold leading-[0.95] tracking-tight mb-8"
+          style={{
+            fontFamily: 'var(--font-serif)',
+            background: 'linear-gradient(135deg, var(--color-text-primary) 0%, #4B5563 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
+          }}
         >
-          Great conversation!
-        </h1>
-        <p
+          Wonderful conversation!
+        </motion.h1>
+
+        <motion.p
+          variants={itemVariants}
           style={{ fontFamily: 'var(--font-sans)' }}
-          className="text-2xl text-[var(--color-text-secondary)] mb-12 leading-relaxed"
+          className="text-xl sm:text-2xl text-[var(--color-text-secondary)] mb-12 leading-relaxed max-w-2xl mx-auto"
         >
-          Would you like to play a quick memory game?
-        </p>
+          Would you like to take a quick quiz about what everyone talked about?
+        </motion.p>
 
         {/* Buttons using PatientButton component */}
-        <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
-          <PatientButton onClick={onYes} variant="primary" size="large">
-            Yes, let's play! 🎯
-          </PatientButton>
+        <motion.div
+          variants={itemVariants}
+          className="flex flex-col sm:flex-row gap-5 justify-center items-center"
+        >
+          <motion.div
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <PatientButton onClick={onYes} variant="primary" size="large">
+              Yes, let's do it!
+            </PatientButton>
+          </motion.div>
 
-          <PatientButton onClick={onNo} variant="secondary" size="large">
-            Not right now
-          </PatientButton>
-        </div>
+          <motion.div
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <PatientButton onClick={onNo} variant="secondary" size="large">
+              Maybe later
+            </PatientButton>
+          </motion.div>
+        </motion.div>
+
+        {/* Subtle hint */}
+        <motion.p
+          variants={itemVariants}
+          style={{ fontFamily: 'var(--font-sans)' }}
+          className="text-sm text-[var(--color-text-secondary)] mt-10 font-medium"
+        >
+          A fun way to reinforce the highlights from your conversation
+        </motion.p>
       </motion.div>
     </motion.div>
   );

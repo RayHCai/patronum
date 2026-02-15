@@ -32,11 +32,11 @@ async function listPublicAvatars() {
 
       // Try creating a session with a known public avatar ID
       const testAvatarIds = [
-        'Angela-inblackskirt-20220820',
+        'Kristin_public_3_20240108',
         'josh_lite3_20230714',
         'default',
         'Wayne_20240711',
-        'Kristin_public_3_20240108'
+        'Angela-inblackskirt-20220820'
       ];
 
       for (const avatarId of testAvatarIds) {

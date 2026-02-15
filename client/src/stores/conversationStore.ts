@@ -36,6 +36,7 @@ interface ConversationState {
   sessionId: string | null;
   topic: CSTTopic | null;
   moderatorId: string | null;
+  moderatorAvatarId: string | null;
 
   // Agents in conversation
   agents: Agent[];
@@ -97,6 +98,12 @@ interface ConversationState {
   videoErrors: Map<string, Error>; // Agent ID → error
   videoInitializedStates: Map<string, boolean>; // Agent ID → fully initialized state
 
+  // === Photo Memory State ===
+  currentPhotoUrl: string | null;
+  currentPhotoCaption: string | null;
+  currentPhotoId: string | null;
+  isPhotoTurnActive: boolean;
+
   // === Actions ===
 
   // Original actions (kept for compatibility)
@@ -114,6 +121,7 @@ interface ConversationState {
 
   // NEW: Linear Loop Actions
   setModeratorId: (id: string) => void;
+  setModeratorAvatarId: (avatarId: string) => void;
   initializeSpeakers: (agents: Agent[], participantId: string, participantName: string, moderatorId?: string) => void;
   setCurrentIndex: (index: number) => void;
   advanceToNextSpeaker: (serverSuggestedAgentId?: string) => void;
@@ -150,6 +158,11 @@ interface ConversationState {
   setVideoError: (agentId: string, error: Error | null) => void;
   setVideoInitialized: (agentId: string, initialized: boolean) => void;
   clearVideoState: () => void;
+
+  // Photo memory actions
+  setCurrentPhoto: (url: string | null, caption: string | null, photoId: string | null) => void;
+  clearCurrentPhoto: () => void;
+  setPhotoTurnActive: (active: boolean) => void;
 }
 
 export const useConversationStore = create<ConversationState>((set, get) => ({
@@ -157,6 +170,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   sessionId: null,
   topic: null,
   moderatorId: null,
+  moderatorAvatarId: null,
   agents: [],
   turns: [],
 
@@ -194,6 +208,12 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
   // Cognitive game state
   showGameChoice: false,
+
+  // Photo memory state
+  currentPhotoUrl: null,
+  currentPhotoCaption: null,
+  currentPhotoId: null,
+  isPhotoTurnActive: false,
   showCognitiveGame: false,
   gameType: null,
   cognitiveGameQuestions: [],
@@ -290,6 +310,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       sessionId: null,
       topic: null,
       moderatorId: null,
+      moderatorAvatarId: null,
       agents: [],
       turns: [],
       currentSpeaker: null,
@@ -327,6 +348,11 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     set({ moderatorId: id });
   },
 
+  setModeratorAvatarId: (avatarId) => {
+    console.log('[ConversationStore] Setting moderator avatar ID:', avatarId);
+    set({ moderatorAvatarId: avatarId });
+  },
+
   /**
    * Initialize speakers array for linear loop system
    * Called after session initialization and agent generation
@@ -347,7 +373,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       {
         index: 0,
         type: 'moderator',
-        name: 'Maya',
+        name: 'Marcus',
         speakerId: finalModeratorId,  // Store moderator ID
         voiceId: 'moderator_voice', // Moderator voice (Rachel - conversational)
       },
@@ -699,5 +725,24 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     videoLoadingStates: new Map(),
     videoErrors: new Map(),
     videoInitializedStates: new Map(),
+  }),
+
+  // Photo memory actions
+  setCurrentPhoto: (url, caption, photoId) => set({
+    currentPhotoUrl: url,
+    currentPhotoCaption: caption,
+    currentPhotoId: photoId,
+    isPhotoTurnActive: true,
+  }),
+
+  clearCurrentPhoto: () => set({
+    currentPhotoUrl: null,
+    currentPhotoCaption: null,
+    currentPhotoId: null,
+    isPhotoTurnActive: false,
+  }),
+
+  setPhotoTurnActive: (active) => set({
+    isPhotoTurnActive: active,
   }),
 }));

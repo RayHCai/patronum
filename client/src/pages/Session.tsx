@@ -39,6 +39,7 @@ export default function Session() {
     startGame,
     clearGameState,
     speakerIndices,
+    moderatorAvatarId,
   } = useConversationStore();
   const { isConnected, sendMessage, on, off } = useWebSocket();
   const { enqueue: enqueueAudio } = useAudioPlayback();
@@ -77,6 +78,7 @@ export default function Session() {
     onSpeechStart: () => {
       console.log('[Session] Speech recognition started (onSpeechStart)');
       setMicState('listening');
+      setCurrentSpeakerId('participant'); // Show pulse animation when user speaks
 
       // Pre-compute next agent response while user is speaking
       // Note: This uses the conversation history up to NOW (before user speaks)
@@ -86,6 +88,7 @@ export default function Session() {
     },
     onSpeechEnd: () => {
       console.log('[Session] Speech recognition ended (onSpeechEnd)');
+      setCurrentSpeakerId(null); // Clear pulse animation when user stops
       // No longer auto-processing - continuous recording
     },
   });
@@ -719,8 +722,20 @@ export default function Session() {
           currentSpeakerId={currentSpeakerId}
           moderator={{
             id: 'moderator',
-            name: 'Maya',
+            name: 'Marcus',
             color: '#8B0000',
+            heygenConfig: {
+              avatarId: moderatorAvatarId || 'Wayne_20240711',
+              appearance: {
+                gender: 'male',
+                ethnicity: 'Caucasian',
+                age: 35,
+                clothing: 'professional attire',
+                background: 'office',
+              },
+              createdAt: new Date().toISOString(),
+              lastUsed: new Date().toISOString(),
+            },
           }}
         />
       </div>

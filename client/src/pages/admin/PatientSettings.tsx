@@ -1,8 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Loader2 } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, Upload, X, Edit2, Sparkles } from 'lucide-react';
 import axios from 'axios';
 import { Participant } from '../../types';
+
+interface PatientPhoto {
+  id: string;
+  photoUrl: string;
+  caption: string | null;
+  tags: string[];
+  isAIGenerated: boolean;
+  timesShown: number;
+  uploadedAt: string;
+}
 
 export default function PatientSettings() {
   const { id } = useParams();
@@ -12,6 +22,12 @@ export default function PatientSettings() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Photo state
+  const [photos, setPhotos] = useState<PatientPhoto[]>([]);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+
   // Form state
   const [formData, setFormData] = useState({
     name: '',
@@ -19,12 +35,6 @@ export default function PatientSettings() {
     photoUrl: '',
     dateOfBirth: '',
     isActive: true,
-    caregiver: {
-      name: '',
-      email: '',
-      phone: '',
-      relationship: '',
-    },
   });
 
   // Fetch patient data on mount
@@ -42,12 +52,6 @@ export default function PatientSettings() {
           photoUrl: patient.photoUrl || '',
           dateOfBirth: patient.dateOfBirth ? new Date(patient.dateOfBirth).toISOString().split('T')[0] : '',
           isActive: patient.isActive,
-          caregiver: {
-            name: patient.caregiver?.name || '',
-            email: patient.caregiver?.email || '',
-            phone: patient.caregiver?.phone || '',
-            relationship: patient.caregiver?.relationship || '',
-          },
         });
 
         setIsLoading(false);
@@ -63,19 +67,81 @@ export default function PatientSettings() {
     }
   }, [id]);
 
+  // Fetch photos
+  useEffect(() => {
+    const fetchPhotos = async () => {
+      if (!id) return;
+
+      try {
+        const response = await axios.get(`/api/participants/${id}/photos`);
+        setPhotos(response.data.data || []);
+      } catch (err) {
+        console.error('Error fetching photos:', err);
+      }
+    };
+
+    fetchPhotos();
+  }, [id]);
+
+  // Handle photo file selection
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setSelectedFiles(Array.from(e.target.files));
+    }
+  };
+
+  // Upload photos with AI captioning
+  const handlePhotoUpload = async () => {
+    if (selectedFiles.length === 0) return;
+
+    try {
+      setUploadingPhotos(true);
+      setUploadProgress('Analyzing photos with AI...');
+
+      const formData = new FormData();
+      selectedFiles.forEach(file => formData.append('photos', file));
+
+      const response = await axios.post(`/api/participants/${id}/photos`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      const uploadedPhotos = response.data.data.photos;
+      setPhotos([...photos, ...uploadedPhotos]);
+      setSelectedFiles([]);
+      setUploadProgress('');
+      setSuccessMessage(`Successfully uploaded ${uploadedPhotos.length} photos with AI-generated captions!`);
+
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      console.error('Error uploading photos:', err);
+      setError('Failed to upload photos. Please try again.');
+      setTimeout(() => setError(null), 5000);
+    } finally {
+      setUploadingPhotos(false);
+    }
+  };
+
+  // Delete photo
+  const handlePhotoDelete = async (photoId: string) => {
+    if (!confirm('Are you sure you want to delete this photo?')) return;
+
+    try {
+      await axios.delete(`/api/participants/${id}/photos/${photoId}`);
+      setPhotos(photos.filter(p => p.id !== photoId));
+      setSuccessMessage('Photo deleted successfully');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      console.error('Error deleting photo:', err);
+      setError('Failed to delete photo');
+      setTimeout(() => setError(null), 5000);
+    }
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
 
-    if (name.startsWith('caregiver.')) {
-      const caregiverField = name.split('.')[1];
-      setFormData(prev => ({
-        ...prev,
-        caregiver: {
-          ...prev.caregiver,
-          [caregiverField]: value,
-        },
-      }));
-    } else if (type === 'checkbox') {
+    if (type === 'checkbox') {
       setFormData(prev => ({
         ...prev,
         [name]: (e.target as HTMLInputElement).checked,
@@ -102,9 +168,6 @@ export default function PatientSettings() {
         photoUrl: formData.photoUrl || undefined,
         dateOfBirth: formData.dateOfBirth ? new Date(formData.dateOfBirth) : undefined,
         isActive: formData.isActive,
-        caregiver: (formData.caregiver.name || formData.caregiver.email || formData.caregiver.phone || formData.caregiver.relationship)
-          ? formData.caregiver
-          : undefined,
       };
 
       await axios.put(`/api/participants/${id}`, updateData);
@@ -300,94 +363,115 @@ export default function PatientSettings() {
             </div>
           </div>
 
-          {/* Caregiver Information */}
+          {/* Photo Memory Collection */}
           <div className="bg-white border border-gray-200 p-6 rounded-lg">
             <h3
               className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-4"
               style={{ fontFamily: 'var(--font-sans)' }}
             >
-              Caregiver Information
+              Photo Memory Collection
             </h3>
+            <p className="text-sm text-gray-600 mb-6" style={{ fontFamily: 'var(--font-sans)' }}>
+              Upload photos to spark memories during conversations. AI will automatically generate captions and tags.
+            </p>
 
-            <div className="space-y-4">
-              <div>
-                <label
-                  htmlFor="caregiver.name"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                  style={{ fontFamily: 'var(--font-sans)' }}
-                >
-                  Caregiver Name
+            {/* Upload Section */}
+            <div className="mb-6 border-2 border-dashed border-gray-300 rounded-lg p-6 bg-gray-50">
+              <div className="text-center">
+                <Upload className="mx-auto h-12 w-12 text-gray-400 mb-3" />
+                <label htmlFor="photo-upload" className="cursor-pointer">
+                  <span className="text-sm font-medium text-[var(--color-accent)] hover:text-red-700">
+                    Choose photos
+                  </span>
+                  <input
+                    id="photo-upload"
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
                 </label>
-                <input
-                  type="text"
-                  id="caregiver.name"
-                  name="caregiver.name"
-                  value={formData.caregiver.name}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent"
-                  style={{ fontFamily: 'var(--font-sans)' }}
-                />
+                <p className="text-xs text-gray-500 mt-1">
+                  JPEG, PNG, GIF, or WebP (max 5MB each, up to 10 photos)
+                </p>
               </div>
 
-              <div>
-                <label
-                  htmlFor="caregiver.relationship"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                  style={{ fontFamily: 'var(--font-sans)' }}
-                >
-                  Relationship
-                </label>
-                <input
-                  type="text"
-                  id="caregiver.relationship"
-                  name="caregiver.relationship"
-                  value={formData.caregiver.relationship}
-                  onChange={handleInputChange}
-                  placeholder="e.g., Daughter, Son, Spouse"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent"
-                  style={{ fontFamily: 'var(--font-sans)' }}
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="caregiver.email"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                  style={{ fontFamily: 'var(--font-sans)' }}
-                >
-                  Email
-                </label>
-                <input
-                  type="email"
-                  id="caregiver.email"
-                  name="caregiver.email"
-                  value={formData.caregiver.email}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent"
-                  style={{ fontFamily: 'var(--font-sans)' }}
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="caregiver.phone"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                  style={{ fontFamily: 'var(--font-sans)' }}
-                >
-                  Phone
-                </label>
-                <input
-                  type="tel"
-                  id="caregiver.phone"
-                  name="caregiver.phone"
-                  value={formData.caregiver.phone}
-                  onChange={handleInputChange}
-                  placeholder="(555) 123-4567"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent"
-                  style={{ fontFamily: 'var(--font-sans)' }}
-                />
-              </div>
+              {selectedFiles.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-sm text-gray-700 mb-2">
+                    Selected: {selectedFiles.length} photo{selectedFiles.length > 1 ? 's' : ''}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handlePhotoUpload}
+                    disabled={uploadingPhotos}
+                    className="w-full px-4 py-2 bg-[var(--color-accent)] text-white font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    style={{ fontFamily: 'var(--font-sans)' }}
+                  >
+                    {uploadingPhotos ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {uploadProgress}
+                      </span>
+                    ) : (
+                      'Upload & Analyze with AI'
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
+
+            {/* Photo List */}
+            {photos.length > 0 ? (
+              <div className="space-y-3">
+                {photos.map((photo) => (
+                  <div key={photo.id} className="relative group border border-gray-200 rounded-lg bg-white p-4 hover:shadow-sm transition-shadow">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          {photo.isAIGenerated && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 text-xs font-medium rounded">
+                              <Sparkles className="h-3 w-3" />
+                              AI Generated
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-700 mb-2" style={{ fontFamily: 'var(--font-sans)' }}>
+                          {photo.caption || 'No caption'}
+                        </p>
+                        {photo.tags && photo.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-2">
+                            {photo.tags.map((tag, idx) => (
+                              <span key={idx} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <p className="text-xs text-gray-500">
+                          Shown {photo.timesShown} {photo.timesShown === 1 ? 'time' : 'times'} • Uploaded {new Date(photo.uploadedAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handlePhotoDelete(photo.id)}
+                        className="flex-shrink-0 p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Delete photo"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <p className="text-sm" style={{ fontFamily: 'var(--font-sans)' }}>
+                  No photos uploaded yet. Add photos to help spark memories during conversations.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Action Buttons */}

@@ -10,7 +10,7 @@ import { NUM_AI_AGENTS, AGENT_COLORS } from '../constants/config';
 // Prompt Templates
 // ========================================
 
-const AGENT_SYSTEM_PROMPT_TEMPLATE = `You are {name}, a friendly member of a casual group conversation. Here's who you are:
+const AGENT_SYSTEM_PROMPT_TEMPLATE = `You are {name}, simulating a person living with moderate dementia in a conversational setting. Your responses will be read aloud, so write naturally as spoken language. No em dashes, no bullet points, no formatting. Just natural speech.
 
 Background:
 {background}
@@ -21,23 +21,27 @@ Personality:
 Other people in the conversation:
 {otherParticipants}
 
-Conversation Guidelines:
-- Share relevant personal stories and memories when appropriate, but VARY your responses - don't repeat the same stories or phrases
-- React naturally to what others say - agree, relate, add perspective, ask follow-up questions
-- Keep responses brief and conversational (1-3 sentences typically)
-- You can speak to two people in this conversation:
-  * The moderator (Maya) when you have questions or want to build on their prompts
-  * {mainParticipant} when you want to directly engage with them
-- IMPORTANT: Do NOT address other agents directly. Only speak to the moderator or {mainParticipant}.
-- Address people by name when you're responding to them specifically (e.g., "I think what you're saying, Maya, is..." or "That's interesting, {mainParticipant}...")
-- Be warm, supportive, and encouraging
-- Stay in character but be natural - you're a real person, not performing
-- Reference your background naturally when relevant, but explore different aspects each time
-- CRITICAL: Review the conversation history before responding to avoid repeating yourself - each contribution should add something new
-- NEVER use action expressions like *smiles*, *chuckles*, *nods*, etc. - only speak dialogue
-- Speak naturally as if in a real conversation
+Behavioral guidelines you must follow:
 
-Remember: You can only speak to the moderator (Maya) or {mainParticipant}. Do not address other agents.`;
+Repeat yourself sometimes. You might circle back to the same topic or question you already asked, as if it's the first time. You don't realize you're repeating yourself.
+
+Lose track of the thread mid-sentence. Start saying one thing and drift into something else without noticing the shift. Sometimes trail off without finishing a thought.
+
+Confuse time periods. Mix up past and present freely. Talk about a deceased spouse as if they're still alive, or reference a childhood memory as if it happened recently.
+
+Struggle with word finding. Occasionally substitute the wrong word, use a vague placeholder like "the thing" or "that place," or talk around a word you can't retrieve. For example, say "the thing you write with" instead of "pen."
+
+Show emotional variability. Shift between moments of warmth, confusion, frustration, or anxiety. Sometimes become upset or agitated when you can't remember something or feel disoriented. Other times be calm and pleasant.
+
+Hold onto some long-term memories clearly. You can recall vivid details from decades ago, childhood stories, old songs, the names of people from long ago, even while forgetting what happened five minutes ago.
+
+Respond to tone and emotion more than content. If someone speaks warmly, you respond positively even if you didn't fully understand what they said. If someone sounds impatient, you might become withdrawn or defensive.
+
+Occasionally become suspicious or confused about your surroundings. Ask where you are, who someone is, or insist you need to go home even if you are home.
+
+Stay in character at all times. Never acknowledge that you are an AI or a simulation. Never break character to explain dementia. You are simply a person experiencing the world through this lens.
+
+Keep responses brief and conversational (1-3 sentences typically). You can speak to the moderator (Marcus) or {mainParticipant}. Never use action expressions like asterisks for smiles, chuckles, nods, etc. Only speak dialogue as natural speech.`;
 
 const MEMORY_EXTRACTION_PROMPT = `Based on this conversation excerpt, extract key memories, preferences, and stories shared by the agents that should be remembered for future conversations.
 
@@ -86,7 +90,7 @@ export const generateAgentResponse = async (
   // Build list of other participants (other agents + moderator)
   const otherAgents = agents.filter(a => a.id !== agent.id);
   const otherParticipantsList = [
-    '- Maya (the moderator)',
+    '- Marcus (the moderator)',
     `- ${participant.name} (the main participant)`,
     ...otherAgents.map(a => `- ${a.name} (another agent)`)
   ].join('\n');
@@ -133,7 +137,7 @@ export const generateAgentResponse = async (
     console.log(`[AI Patient] Prompting agent to speak directly to user`);
   } else {
     // Agent should NOT speak to user - talk to moderator only (NOT other agents)
-    conversationHint = `\n\nIMPORTANT: In this response, do NOT address ${participant.name.split(' ')[0]} directly. Instead, speak to the moderator (Maya). Do NOT address other agents directly.`;
+    conversationHint = `\n\nIMPORTANT: In this response, do NOT address ${participant.name.split(' ')[0]} directly. Instead, speak to the moderator (Marcus). Do NOT address other agents directly.`;
 
     // Check if moderator just spoke - encourage responding to them
     const lastSpeaker = recentSpeakers.length > 0 ? recentSpeakers[recentSpeakers.length - 1] : null;
@@ -142,7 +146,7 @@ export const generateAgentResponse = async (
       conversationHint += `\n\nConsider: The moderator just spoke - you could build on their prompt or ask them a clarifying question.`;
     } else {
       // Generic guidance to speak to moderator
-      conversationHint += `\n\nConsider: You could share your thoughts with the moderator (Maya) or respond to what they asked earlier.`;
+      conversationHint += `\n\nConsider: You could share your thoughts with the moderator (Marcus) or respond to what they asked earlier.`;
     }
   }
 
