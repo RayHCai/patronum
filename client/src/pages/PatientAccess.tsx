@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../stores/authStore';
 import AuthLayout from '../components/auth/AuthLayout';
+import { LoadingScreen } from '../components/ui';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -49,26 +50,12 @@ export default function PatientAccess() {
   if (isLoading) {
     return (
       <AuthLayout>
-        <motion.div
-          className="bg-white/80 backdrop-blur-md rounded-2xl shadow-xl border border-[var(--color-border)] p-12 text-center max-w-md"
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.3 }}
-        >
-          <div className="relative w-16 h-16 mx-auto mb-6">
-            <motion.div
-              className="absolute inset-0 rounded-full border-4 border-[var(--color-accent)] border-t-transparent"
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-            />
-          </div>
-          <p
-            className="text-xl text-[var(--color-text-primary)] font-medium"
-            style={{ fontFamily: 'var(--font-serif)' }}
-          >
-            Verifying access...
-          </p>
-        </motion.div>
+        <LoadingScreen
+          mode="card"
+          size="large"
+          message="Verifying access..."
+          subtitle=""
+        />
       </AuthLayout>
     );
   }

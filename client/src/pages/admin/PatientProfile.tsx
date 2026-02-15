@@ -17,6 +17,7 @@ import 'reactflow/dist/style.css';
 import { Participant, Session, Turn } from '../../types';
 import axios from 'axios';
 import { SpeechGraphVisualization, SpeechGraphMetrics } from '../../components/SpeechGraph';
+import { LoadingScreen } from '../../components/ui';
 
 // Custom circular node component with proper handles
 function CircularNode({ data }: NodeProps) {
@@ -557,9 +558,12 @@ export default function PatientProfile() {
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-4xl mx-auto px-8 py-8">
             {isLoadingSession ? (
-              <div className="flex items-center justify-center h-64">
-                <div className="inline-block h-8 w-8 animate-spin rounded-full border-3 border-solid border-[var(--color-accent)] border-r-transparent"></div>
-              </div>
+              <LoadingScreen
+                mode="inline"
+                size="small"
+                message="Loading session details..."
+                subtitle=""
+              />
             ) : selectedSession ? (
               <>
                 {/* Date Header */}

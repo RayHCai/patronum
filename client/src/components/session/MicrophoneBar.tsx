@@ -1,4 +1,4 @@
-// Microphone bar with automatic state visualization
+// Professional microphone bar - matches admin page aesthetic
 import { motion } from 'framer-motion';
 import { Mic, Square, RotateCcw, Check } from 'lucide-react';
 import { MicState } from '../../types';
@@ -20,78 +20,78 @@ export default function MicrophoneBar({
 }: MicrophoneBarProps) {
   const stateConfig = {
     idle: {
-      emoji: '💤',
-      text: 'Waiting...',
-      bg: 'bg-[var(--color-bg-secondary)]',
-      textColor: 'text-[var(--color-text-secondary)]',
+      text: 'Waiting',
+      icon: Mic,
+      iconColor: 'text-gray-400',
+      textColor: 'text-gray-600',
     },
     'your-turn': {
-      emoji: '🎤',
-      text: 'Your turn to speak!',
-      bg: 'bg-[var(--color-accent-light)]',
+      text: 'Your turn to speak',
+      icon: Mic,
+      iconColor: 'text-[var(--color-accent)]',
       textColor: 'text-[var(--color-accent)]',
       pulse: true,
     },
     listening: {
-      emoji: '👂',
-      text: 'Listening to you...',
-      bg: 'bg-blue-50',
-      textColor: 'text-blue-700',
+      text: 'Listening',
+      icon: Mic,
+      iconColor: 'text-[var(--color-accent)]',
+      textColor: 'text-gray-900',
       pulse: true,
     },
     confirming: {
-      emoji: '⏸️',
-      text: 'Ready to submit?',
-      bg: 'bg-amber-50',
-      textColor: 'text-amber-700',
+      text: 'Review your response',
+      icon: Mic,
+      iconColor: 'text-gray-600',
+      textColor: 'text-gray-900',
     },
     processing: {
-      emoji: '💭',
-      text: 'Processing...',
-      bg: 'bg-[var(--color-bg-secondary)]',
-      textColor: 'text-[var(--color-text-secondary)]',
+      text: 'Processing',
+      icon: Mic,
+      iconColor: 'text-gray-400',
+      textColor: 'text-gray-600',
     },
     speaking: {
-      emoji: '💬',
-      text: 'Agent speaking...',
-      bg: 'bg-[var(--color-accent-light)]',
-      textColor: 'text-[var(--color-accent)]',
+      text: 'Speaking',
+      icon: Mic,
+      iconColor: 'text-gray-600',
+      textColor: 'text-gray-900',
     },
   };
 
   const config = stateConfig[micState];
+  const IconComponent = config.icon;
 
   return (
     <motion.div
-      className={`fixed bottom-0 left-0 right-0 z-20 min-h-24 ${config.bg} border-t border-[var(--color-border)] flex items-center justify-center px-8 py-4 transition-colors duration-300 backdrop-blur-md`}
-      style={{ backgroundColor: 'rgba(255, 255, 255, 0.9)' }}
-      animate={config.pulse ? { scale: [1, 1.01, 1] } : {}}
-      transition={{ duration: 1.5, repeat: config.pulse ? Infinity : 0 }}
+      className="fixed bottom-0 left-0 right-0 z-20 bg-white/95 backdrop-blur-sm border-t border-gray-200 px-8 py-4"
+      initial={{ y: 100 }}
+      animate={{ y: 0 }}
+      transition={{ duration: 0.3 }}
     >
-      <div className="flex items-center gap-12 w-full max-w-4xl justify-center">
-        {/* Left: Emoji & Status */}
-        <div className="flex items-center gap-6">
-          {/* Emoji Indicator */}
+      <div className="flex items-center justify-between max-w-6xl mx-auto">
+        {/* Left: Status & Icon */}
+        <div className="flex items-center gap-4">
+          {/* Icon */}
           <motion.div
-            className="text-5xl"
-            animate={config.pulse ? { scale: [1, 1.1, 1] } : {}}
-            transition={{ duration: 1, repeat: config.pulse ? Infinity : 0 }}
+            animate={config.pulse ? { scale: [1, 1.15, 1] } : {}}
+            transition={{ duration: 1.5, repeat: config.pulse ? Infinity : 0 }}
           >
-            {config.emoji}
+            <IconComponent size={20} className={config.iconColor} strokeWidth={2} />
           </motion.div>
 
           {/* Status Text */}
-          <div className="flex flex-col items-start">
+          <div className="flex flex-col">
             <p
               style={{ fontFamily: 'var(--font-sans)' }}
-              className={`text-2xl font-semibold ${config.textColor}`}
+              className={`text-sm font-medium ${config.textColor}`}
             >
               {config.text}
             </p>
             {transcript && (micState === 'listening' || micState === 'confirming') && (
               <p
                 style={{ fontFamily: 'var(--font-sans)' }}
-                className="text-lg text-[var(--color-text-secondary)] mt-1 italic max-w-2xl line-clamp-2"
+                className="text-xs text-gray-500 mt-0.5 max-w-md truncate"
               >
                 "{transcript}"
               </p>
@@ -100,59 +100,41 @@ export default function MicrophoneBar({
         </div>
 
         {/* Right: Controls */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           {/* Stop Recording Button - shown during listening */}
           {micState === 'listening' && onStopRecording && (
-            <motion.button
+            <button
               onClick={onStopRecording}
-              className="flex items-center gap-2 px-8 py-4 text-[17px] font-semibold bg-red-500 hover:bg-red-600 text-white rounded-md shadow-lg hover:shadow-xl transition-all duration-150"
-              style={{ fontFamily: 'var(--font-serif)' }}
-              whileHover={{ scale: 1.02, boxShadow: '0 12px 40px rgba(239, 68, 68, 0.3)' }}
-              whileTap={{ scale: 0.97 }}
-              transition={{ duration: 0.2, ease: [0.34, 1.56, 0.64, 1] }}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[var(--color-accent)] hover:bg-red-800 transition-colors rounded-lg"
+              style={{ fontFamily: 'var(--font-sans)' }}
             >
-              <Square size={20} fill="currentColor" />
-              Stop Recording
-            </motion.button>
+              <Square size={14} fill="currentColor" strokeWidth={2.5} />
+              Stop
+            </button>
           )}
 
           {/* Confirmation Buttons - shown during confirming state */}
           {micState === 'confirming' && (
             <>
-              <motion.button
+              <button
                 onClick={onReturnToRecording}
-                className="flex items-center gap-2 px-8 py-4 text-[17px] font-semibold text-[var(--color-text-primary)] border-2 border-[var(--color-border-hover)] rounded-md hover:border-[var(--color-text-primary)] transition-all duration-150"
-                style={{ fontFamily: 'var(--font-serif)' }}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.97 }}
-                transition={{ duration: 0.2, ease: [0.34, 1.56, 0.64, 1] }}
-              >
-                <RotateCcw size={20} />
-                Continue Recording
-              </motion.button>
-
-              <motion.button
-                onClick={onConfirmTranscript}
-                className="flex items-center gap-2 px-8 py-4 text-[17px] font-semibold bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-md shadow-lg hover:shadow-xl transition-all duration-150"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 hover:border-gray-400 transition-all rounded-lg"
                 style={{ fontFamily: 'var(--font-sans)' }}
-                whileHover={{ scale: 1.02, boxShadow: '0 12px 40px rgba(140, 21, 21, 0.3)' }}
-                whileTap={{ scale: 0.97 }}
-                transition={{ duration: 0.2, ease: [0.34, 1.56, 0.64, 1] }}
               >
-                <Check size={20} />
+                <RotateCcw size={14} strokeWidth={2.5} />
+                Continue
+              </button>
+
+              <button
+                onClick={onConfirmTranscript}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[var(--color-accent)] hover:bg-red-800 transition-colors rounded-lg"
+                style={{ fontFamily: 'var(--font-sans)' }}
+              >
+                <Check size={14} strokeWidth={2.5} />
                 Submit
-              </motion.button>
+              </button>
             </>
           )}
-
-          {/* Mic Icon */}
-          <motion.div
-            className={`p-4 rounded-full ${config.bg} border-2 border-current`}
-            animate={micState === 'listening' ? { scale: [1, 1.1, 1] } : {}}
-            transition={{ duration: 0.5, repeat: micState === 'listening' ? Infinity : 0 }}
-          >
-            <Mic size={32} className={config.textColor} />
-          </motion.div>
         </div>
       </div>
     </motion.div>
