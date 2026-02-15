@@ -120,6 +120,20 @@ export class ConversationWebSocketHandler {
 
       // Send session details to client
       // Client will manage all turn flow from here
+      console.log(`[WebSocket Handler] ==========================================`);
+      console.log(`[WebSocket Handler] SENDING AGENTS TO CLIENT`);
+      console.log(`[WebSocket Handler] ==========================================`);
+      session.agents.forEach((agent: any, index: number) => {
+        console.log(`[WebSocket Handler] Agent ${index + 1}:`, {
+          id: agent.id,
+          name: agent.name,
+          heygenAvatarId: agent.heygenAvatarId,
+          hasHeygenConfig: !!agent.heygenConfig,
+          heygenConfigType: typeof agent.heygenConfig,
+          heygenConfigAvatarId: agent.heygenConfig?.avatarId,
+        });
+      });
+
       this.sendMessage(ws, {
         type: 'session_start',
         payload: {

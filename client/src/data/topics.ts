@@ -7,7 +7,7 @@ export const cstTopics: CSTTopic[] = [
     title: 'Food & Cooking',
     description: 'Share favorite recipes and food memories',
     category: 'nostalgia',
-    iconEmoji: '🍳',
+    icon: 'ChefHat',
     backgroundColor: '#FEF3C7',
   },
   {
@@ -15,7 +15,7 @@ export const cstTopics: CSTTopic[] = [
     title: 'Family & Friends',
     description: 'Talk about loved ones and special relationships',
     category: 'personal',
-    iconEmoji: '👨‍👩‍👧‍👦',
+    icon: 'Users',
     backgroundColor: '#DBEAFE',
   },
   {
@@ -23,7 +23,7 @@ export const cstTopics: CSTTopic[] = [
     title: 'Music & Songs',
     description: 'Discuss favorite songs and musical memories',
     category: 'nostalgia',
-    iconEmoji: '🎵',
+    icon: 'Music',
     backgroundColor: '#E9D5FF',
   },
   {
@@ -31,7 +31,7 @@ export const cstTopics: CSTTopic[] = [
     title: 'Nature & Gardens',
     description: 'Talk about plants, flowers, and the outdoors',
     category: 'discussion',
-    iconEmoji: '🌺',
+    icon: 'Flower2',
     backgroundColor: '#D1FAE5',
   },
   {
@@ -39,7 +39,7 @@ export const cstTopics: CSTTopic[] = [
     title: 'Childhood Memories',
     description: 'Share stories from growing up',
     category: 'nostalgia',
-    iconEmoji: '🎪',
+    icon: 'Baby',
     backgroundColor: '#FED7AA',
   },
   {
@@ -47,7 +47,7 @@ export const cstTopics: CSTTopic[] = [
     title: 'Hobbies & Interests',
     description: 'Discuss favorite activities and pastimes',
     category: 'personal',
-    iconEmoji: '🎨',
+    icon: 'Palette',
     backgroundColor: '#FBCFE8',
   },
 ];

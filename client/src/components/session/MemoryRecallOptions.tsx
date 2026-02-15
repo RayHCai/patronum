@@ -28,20 +28,32 @@ export default function MemoryRecallOptions({
         return (
           <motion.button
             key={idx}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: idx * 0.1 }}
-            whileHover={{ scale: showFeedback ? 1 : 1.05 }}
-            whileTap={{ scale: showFeedback ? 1 : 0.95 }}
+            initial={{ opacity: 0, y: 20, filter: 'blur(6px)' }}
+            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+            transition={{
+              delay: idx * 0.1,
+              duration: 0.45,
+              ease: [0.34, 1.56, 0.64, 1]
+            }}
+            whileHover={{
+              scale: showFeedback ? 1 : 1.03,
+              y: showFeedback ? 0 : -4,
+              transition: { duration: 0.2 }
+            }}
+            whileTap={{ scale: showFeedback ? 1 : 0.97 }}
             onClick={() => !showFeedback && onSelect(option)}
             disabled={showFeedback}
+            style={{ fontFamily: 'var(--font-serif)' }}
             className={`
-              min-w-[200px] h-32 px-8 rounded-2xl text-3xl font-bold shadow-xl
-              transition-all duration-300 cursor-pointer
-              ${showCorrect ? 'bg-green-500 text-white ring-4 ring-green-300' :
-                showIncorrect ? 'bg-red-400 text-white ring-4 ring-red-300' :
-                isSelected ? 'bg-blue-500 text-white ring-4 ring-blue-300' :
-                'bg-white text-gray-800 hover:bg-gray-50'}
+              min-w-[240px] h-36 px-10 rounded-3xl text-3xl font-semibold
+              transition-all duration-300 cursor-pointer backdrop-blur-xl
+              ${showCorrect ?
+                'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-2xl shadow-emerald-500/30 border-0' :
+                showIncorrect ?
+                'bg-gradient-to-br from-orange-400 to-orange-500 text-white shadow-2xl shadow-orange-400/30 border-0' :
+                isSelected ?
+                'bg-gradient-to-br from-[var(--color-accent)] to-[#A01E1E] text-white shadow-2xl shadow-red-500/20 border-0' :
+                'bg-white/80 backdrop-blur-xl text-[var(--color-text-primary)] hover:bg-white hover:shadow-xl border border-[var(--color-border-hover)] hover:border-[var(--color-text-secondary)]'}
               ${showFeedback ? 'cursor-not-allowed' : ''}
             `}
           >

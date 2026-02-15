@@ -33,7 +33,6 @@ export default function CognitiveGame({ gameType, questions, onComplete, onSkip 
     switch (gameType) {
       case 'memory_recall': return "Let's Remember Together 🎯";
       case 'pattern_recognition': return "Find the Pattern 🧩";
-      case 'word_association': return "Connect the Words 💭";
       case 'image_matching': return "Picture This 🖼️";
     }
   };
@@ -89,8 +88,6 @@ export default function CognitiveGame({ gameType, questions, onComplete, onSkip 
         return <MemoryRecallOptions {...commonProps} />;
       case 'pattern_recognition':
         return <PatternRecognitionOptions {...commonProps} />;
-      case 'word_association':
-        return <WordAssociationOptions {...commonProps} />;
       case 'image_matching':
         return <ImageMatchingOptions {...commonProps} />;
     }
@@ -105,24 +102,31 @@ export default function CognitiveGame({ gameType, questions, onComplete, onSkip 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-gradient-to-br from-blue-50 to-purple-50 z-50 overflow-y-auto"
+      className="fixed inset-0 bg-[var(--color-bg-primary)] z-50 overflow-y-auto"
     >
+      {/* Gradient overlay matching landing page */}
+      <div className="absolute inset-0 bg-gradient-to-br from-red-50/30 via-white to-red-50/20 pointer-events-none" />
+
       {/* Game header */}
-      <div className="text-center pt-12 pb-6">
+      <div className="relative z-10 text-center pt-12 pb-6">
         <motion.h2
           initial={{ y: -20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="text-4xl font-bold text-gray-800 mb-4"
+          style={{ fontFamily: 'var(--font-serif)' }}
+          className="text-5xl font-semibold text-[var(--color-text-primary)] mb-4 tracking-tight"
         >
           {getGameTitle()}
         </motion.h2>
-        <p className="text-2xl text-gray-600">
+        <p
+          style={{ fontFamily: 'var(--font-sans)' }}
+          className="text-2xl text-[var(--color-text-secondary)]"
+        >
           Question {currentIndex + 1} of {questions.length}
         </p>
       </div>
 
       {/* Question area */}
-      <div className="flex flex-col items-center justify-center px-8 pb-32">
+      <div className="relative z-10 flex flex-col items-center justify-center px-8 pb-32">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentIndex}
@@ -133,7 +137,10 @@ export default function CognitiveGame({ gameType, questions, onComplete, onSkip 
             className="w-full max-w-4xl"
           >
             {/* Question text */}
-            <div className="text-3xl text-gray-800 mb-12 text-center font-medium">
+            <div
+              style={{ fontFamily: 'var(--font-sans)' }}
+              className="text-3xl text-[var(--color-text-primary)] mb-12 text-center font-medium leading-relaxed"
+            >
               {currentQuestion.question}
             </div>
 
@@ -144,7 +151,7 @@ export default function CognitiveGame({ gameType, questions, onComplete, onSkip 
       </div>
 
       {/* Progress dots */}
-      <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 flex gap-3">
+      <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 flex gap-3 z-20">
         {questions.map((_, idx) => (
           <motion.div
             key={idx}
@@ -152,8 +159,8 @@ export default function CognitiveGame({ gameType, questions, onComplete, onSkip 
             animate={{ scale: 1 }}
             transition={{ delay: idx * 0.1 }}
             className={`w-4 h-4 rounded-full transition-colors duration-300 ${
-              idx < currentIndex ? 'bg-green-500' :
-              idx === currentIndex ? 'bg-blue-500' :
+              idx < currentIndex ? 'bg-[var(--color-accent)]' :
+              idx === currentIndex ? 'bg-[var(--color-accent)]' :
               'bg-gray-300'
             }`}
           />
@@ -163,7 +170,8 @@ export default function CognitiveGame({ gameType, questions, onComplete, onSkip 
       {/* Skip button */}
       <button
         onClick={onSkip}
-        className="fixed bottom-8 right-8 text-gray-500 hover:text-gray-700 text-xl underline transition-colors"
+        style={{ fontFamily: 'var(--font-sans)' }}
+        className="fixed bottom-8 right-8 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xl underline transition-colors z-20"
       >
         Skip game
       </button>
@@ -193,9 +201,12 @@ function FeedbackOverlay({ isCorrect, correctAnswer }: FeedbackOverlayProps) {
       initial={{ opacity: 0, scale: 0.8 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.8 }}
-      className={`fixed inset-0 z-50 flex items-center justify-center ${
-        isCorrect ? 'bg-green-500/90' : 'bg-orange-400/90'
-      }`}
+      className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm"
+      style={{
+        backgroundColor: isCorrect
+          ? 'rgba(16, 185, 129, 0.95)' // Elegant green
+          : 'rgba(251, 146, 60, 0.95)' // Elegant orange
+      }}
     >
       <motion.div
         initial={{ y: 20 }}
@@ -212,8 +223,18 @@ function FeedbackOverlay({ isCorrect, correctAnswer }: FeedbackOverlayProps) {
             >
               ✅
             </motion.div>
-            <h2 className="text-6xl font-bold mb-4">That's right!</h2>
-            <p className="text-4xl">Great memory!</p>
+            <h2
+              style={{ fontFamily: 'var(--font-serif)' }}
+              className="text-6xl font-bold mb-4"
+            >
+              That's right!
+            </h2>
+            <p
+              style={{ fontFamily: 'var(--font-sans)' }}
+              className="text-4xl"
+            >
+              Great memory!
+            </p>
 
             {/* Confetti effect */}
             <div className="absolute inset-0 pointer-events-none">
@@ -245,8 +266,18 @@ function FeedbackOverlay({ isCorrect, correctAnswer }: FeedbackOverlayProps) {
             >
               💡
             </motion.div>
-            <h2 className="text-6xl font-bold mb-4">Good try!</h2>
-            <p className="text-4xl">It was {correctAnswer}!</p>
+            <h2
+              style={{ fontFamily: 'var(--font-serif)' }}
+              className="text-6xl font-bold mb-4"
+            >
+              Good try!
+            </h2>
+            <p
+              style={{ fontFamily: 'var(--font-sans)' }}
+              className="text-4xl"
+            >
+              It was {correctAnswer}!
+            </p>
           </>
         )}
       </motion.div>

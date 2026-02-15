@@ -12,6 +12,57 @@ import { analyzeSessionSpeechGraph } from '../services/speechGraphAnalysis';
 const router = Router();
 
 /**
+ * Parse heygenConfig from JSON string to object for client consumption
+ * Includes fallback logic for legacy agents with incomplete heygenConfig
+ */
+function serializeAgentForClient(agent: any) {
+  let heygenConfig = agent.heygenConfig;
+
+  // Parse if it's a string
+  if (heygenConfig && typeof heygenConfig === 'string') {
+    try {
+      heygenConfig = JSON.parse(heygenConfig);
+    } catch (e) {
+      console.error(`[Sessions] Failed to parse heygenConfig for agent ${agent.id}:`, e);
+      heygenConfig = null;
+    }
+  }
+
+  // Fallback: If heygenConfig exists but is missing avatarId, use heygenAvatarId field
+  if (heygenConfig && !heygenConfig.avatarId && agent.heygenAvatarId) {
+    console.log(`[Sessions] Adding missing avatarId to heygenConfig for agent ${agent.id}`);
+    heygenConfig.avatarId = agent.heygenAvatarId;
+  } else if (!heygenConfig && agent.heygenAvatarId) {
+    // Fallback: If no heygenConfig but has heygenAvatarId, create a minimal config
+    console.log(`[Sessions] Creating minimal heygenConfig for agent ${agent.id} from heygenAvatarId`);
+    heygenConfig = {
+      avatarId: agent.heygenAvatarId,
+      appearance: {
+        gender: 'male',
+        ethnicity: 'Caucasian',
+        age: agent.age || 68,
+        clothing: 'casual sweater',
+        background: 'cozy room',
+      },
+      createdAt: new Date().toISOString(),
+      lastUsed: new Date().toISOString(),
+    };
+  }
+
+  return {
+    id: agent.id,
+    name: agent.name,
+    age: agent.age,
+    background: agent.background,
+    personality: agent.personality,
+    voiceId: agent.voiceId,
+    avatarColor: agent.avatarColor,
+    heygenAvatarId: agent.heygenAvatarId,
+    heygenConfig,
+  };
+}
+
+/**
  * GET /api/sessions/:id
  * Get session details with turns
  *
@@ -167,12 +218,18 @@ router.post('/:id/generate-agents', async (req: Request, res, next) => {
     const sessionId = req.params.id;
     const { moderatorId, count = NUM_AI_AGENTS } = req.body;
 
+    console.log('\n\n');
+    console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥');
     console.log('[Agent Gen] ==========================================');
-    console.log('[Agent Gen] RECEIVED REQUEST TO GENERATE AGENTS');
+    console.log('[Agent Gen] ⚡ GENERATE AGENTS ENDPOINT HIT! ⚡');
     console.log('[Agent Gen] ==========================================');
+    console.log('[Agent Gen] Session ID:', sessionId);
+    console.log('[Agent Gen] Moderator ID:', moderatorId);
     console.log('[Agent Gen] Request body count:', req.body.count);
     console.log('[Agent Gen] Final count value:', count);
     console.log('[Agent Gen] NUM_AI_AGENTS constant:', NUM_AI_AGENTS);
+    console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥');
+    console.log('\n\n');
 
     // Validate input
     if (!moderatorId || typeof moderatorId !== 'string') {
@@ -249,12 +306,33 @@ router.post('/:id/generate-agents', async (req: Request, res, next) => {
           background: 'cozy room',
         };
 
-        const heygenAvatarId = await heygenService.getOrCreateAvatar({
-          appearance,
-          avatarId: '',
-          createdAt: new Date().toISOString(),
-          lastUsed: new Date().toISOString(),
-        });
+        console.log(`[Agent Gen] Creating agent ${profile.name} with appearance:`, appearance);
+
+        let heygenAvatarId: string;
+        try {
+          heygenAvatarId = await heygenService.getOrCreateAvatar({
+            appearance,
+            avatarId: '',
+            createdAt: new Date().toISOString(),
+            lastUsed: new Date().toISOString(),
+          });
+          console.log(`[Agent Gen] Got HeyGen avatar ID for ${profile.name}: ${heygenAvatarId}`);
+        } catch (heygenError) {
+          console.error(`[Agent Gen] HeyGen avatar creation failed for ${profile.name}:`, heygenError);
+          // Generate fallback avatar ID based on appearance (still valid avatar!)
+          heygenAvatarId = appearance.gender === 'female'
+            ? 'Angela-inblackskirt-20220820'
+            : 'Wayne_20240711';
+          console.log(`[Agent Gen] Using fallback HeyGen avatar ID: ${heygenAvatarId}`);
+        }
+
+        // Ensure we have a valid avatar ID
+        if (!heygenAvatarId || heygenAvatarId === 'default' || heygenAvatarId === 'fallback-avatar-id') {
+          heygenAvatarId = appearance.gender === 'female'
+            ? 'Angela-inblackskirt-20220820'
+            : 'Wayne_20240711';
+          console.warn(`[Agent Gen] Invalid avatar ID detected, using fallback: ${heygenAvatarId}`);
+        }
 
         // Create agent in database
         const agent = await prisma.agent.create({
@@ -267,16 +345,26 @@ router.post('/:id/generate-agents', async (req: Request, res, next) => {
             avatarColor: profile.avatarColor,
             voiceId: profile.voiceId,
             heygenAvatarId,
-            heygenConfig: JSON.stringify({ appearance }),
+            heygenConfig: JSON.stringify({
+              avatarId: heygenAvatarId,
+              appearance,
+              createdAt: new Date().toISOString(),
+              lastUsed: new Date().toISOString(),
+            }),
           },
         });
 
-        console.log(`[Agent Gen] Created agent ${agent.id}: ${agent.name} with HeyGen avatar ${heygenAvatarId}`);
+        console.log(`[Agent Gen] ✅ Created agent ${agent.id}: ${agent.name} with HeyGen avatar ${heygenAvatarId}`);
 
         return agent;
       } catch (error) {
-        console.error(`[Agent Gen] Failed to create agent ${profile.name}:`, error);
-        // Return a fallback mock agent
+        console.error(`[Agent Gen] ❌ Failed to create agent ${profile.name}:`, error);
+        // Generate a valid fallback avatar even in error case
+        const fallbackGender = profile.gender || 'male';
+        const fallbackAvatarId = fallbackGender === 'female'
+          ? 'Angela-inblackskirt-20220820'
+          : 'Wayne_20240711';
+
         return prisma.agent.create({
           data: {
             participantId: session.participantId,
@@ -286,7 +374,19 @@ router.post('/:id/generate-agents', async (req: Request, res, next) => {
             personality: profile.personality,
             avatarColor: profile.avatarColor,
             voiceId: profile.voiceId,
-            heygenAvatarId: 'fallback-avatar-id',
+            heygenAvatarId: fallbackAvatarId,
+            heygenConfig: JSON.stringify({
+              avatarId: fallbackAvatarId,
+              appearance: {
+                gender: profile.gender || 'male',
+                ethnicity: profile.ethnicity || 'Caucasian',
+                age: profile.age,
+                clothing: 'casual sweater',
+                background: 'cozy room',
+              },
+              createdAt: new Date().toISOString(),
+              lastUsed: new Date().toISOString(),
+            }),
           },
         });
       }
@@ -316,21 +416,11 @@ router.post('/:id/generate-agents', async (req: Request, res, next) => {
       data: { status: 'active' },
     });
 
-    // Return agents to client
+    // Return agents to client with properly parsed heygenConfig
     res.json({
       success: true,
       data: {
-        agents: agents.map((agent) => ({
-          id: agent.id,
-          name: agent.name,
-          age: agent.age,
-          background: agent.background,
-          personality: agent.personality,
-          voiceId: agent.voiceId,
-          avatarColor: agent.avatarColor,
-          heygenAvatarId: agent.heygenAvatarId,
-          heygenConfig: agent.heygenConfig,
-        })),
+        agents: agents.map(serializeAgentForClient),
       },
     });
   } catch (error) {

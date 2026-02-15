@@ -96,9 +96,12 @@ export class HeygenService {
    * 3. Replacing these IDs with your custom avatar IDs
    */
   private selectAvatarIdByAppearance(appearance?: HeygenAvatarAppearance): string {
+    // Default avatars if no appearance specified
+    const defaultMale = 'Wayne_20240711';
+    const defaultFemale = 'Angela-inblackskirt-20220820';
+
     if (!appearance) {
-      // Return default avatar if no appearance specified
-      return 'default';
+      return defaultMale; // Return valid avatar instead of 'default'
     }
 
     // Map gender and ethnicity to public HeyGen avatar IDs
@@ -122,10 +125,19 @@ export class HeygenService {
 
     const genderMap = avatarMap[appearance.gender];
     if (!genderMap) {
-      return 'default';
+      // Fallback to default avatar based on gender guess
+      console.warn(`[HeyGen] Unknown gender "${appearance.gender}", using default`);
+      return appearance.gender === 'female' ? defaultFemale : defaultMale;
     }
 
-    return genderMap[appearance.ethnicity] || 'default';
+    const avatarId = genderMap[appearance.ethnicity];
+    if (!avatarId) {
+      // Fallback to first avatar in gender map
+      console.warn(`[HeyGen] Unknown ethnicity "${appearance.ethnicity}" for gender "${appearance.gender}", using fallback`);
+      return Object.values(genderMap)[0] || (appearance.gender === 'female' ? defaultFemale : defaultMale);
+    }
+
+    return avatarId;
   }
 
   /**

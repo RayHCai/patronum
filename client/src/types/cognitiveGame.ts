@@ -1,6 +1,6 @@
 // Cognitive Game Types
 
-export type GameType = 'memory_recall' | 'pattern_recognition' | 'word_association' | 'image_matching';
+export type GameType = 'memory_recall' | 'pattern_recognition' | 'image_matching';
 
 export interface ImageOption {
   id: string;

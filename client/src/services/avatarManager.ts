@@ -1,10 +1,14 @@
 // Global manager for HeyGen avatar instances
 // Allows conversation flow to trigger avatar speech without tight coupling
+// HYBRID APPROACH: Uses 11Labs TTS + HeyGen lip-sync for best quality
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 interface AvatarInstance {
   agentId: string;
   speak: (text: string, audioUrl?: string) => Promise<void>;
   stop: () => Promise<void>;
+  voiceId?: string; // ElevenLabs voice ID for this avatar
 }
 
 class AvatarManager {
@@ -27,9 +31,11 @@ class AvatarManager {
   }
 
   /**
-   * Make an avatar speak with lip-sync
+   * Make an avatar speak with HYBRID approach (11Labs voice + HeyGen lip-sync)
+   * If voiceId is provided, generates 11Labs audio first
+   * Otherwise falls back to HeyGen's built-in TTS
    */
-  async speak(agentId: string, text: string, audioUrl?: string): Promise<void> {
+  async speak(agentId: string, text: string, voiceId?: string, audioUrl?: string): Promise<void> {
     const avatar = this.avatars.get(agentId);
     if (!avatar) {
       console.warn(`[Avatar Manager] Avatar ${agentId} not registered, skipping video speech`);
@@ -37,8 +43,49 @@ class AvatarManager {
     }
 
     try {
-      console.log(`[Avatar Manager] Triggering speech for avatar ${agentId}`);
-      await avatar.speak(text, audioUrl);
+      // If audioUrl is already provided, use it directly
+      if (audioUrl) {
+        console.log(`[Avatar Manager] Using provided audio URL for ${agentId}`);
+        await avatar.speak(text, audioUrl);
+        return;
+      }
+
+      // If voiceId is provided, generate 11Labs audio (HYBRID APPROACH)
+      const effectiveVoiceId = voiceId || avatar.voiceId;
+
+      if (effectiveVoiceId) {
+        console.log(`[Avatar Manager] 🎙️ Generating 11Labs audio for ${agentId} (voiceId: ${effectiveVoiceId})`);
+
+        try {
+          const response = await fetch(`${API_URL}/api/audio/generate-url`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              text,
+              voiceId: effectiveVoiceId,
+            }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            const generatedAudioUrl = data.data.audioUrl;
+            console.log(`[Avatar Manager] ✅ 11Labs audio generated, syncing with HeyGen`);
+            await avatar.speak(text, generatedAudioUrl);
+            return;
+          } else {
+            console.warn(`[Avatar Manager] Failed to generate 11Labs audio, falling back to HeyGen TTS`);
+          }
+        } catch (audioError) {
+          console.warn(`[Avatar Manager] Error generating 11Labs audio, falling back to HeyGen TTS:`, audioError);
+        }
+      }
+
+      // Fallback: Use HeyGen's built-in TTS
+      console.log(`[Avatar Manager] Using HeyGen built-in TTS for ${agentId}`);
+      await avatar.speak(text);
+
     } catch (error) {
       console.error(`[Avatar Manager] Failed to trigger speech for ${agentId}:`, error);
     }

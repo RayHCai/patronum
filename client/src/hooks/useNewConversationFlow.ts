@@ -7,6 +7,16 @@ import { NUM_AI_AGENTS } from '../constants/config';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
+/**
+ * Get authentication token
+ * TODO: Implement proper authentication
+ */
+const getAuthToken = (): string => {
+  // For now, return a placeholder token since auth is not fully implemented
+  // In production, this should retrieve the token from localStorage or auth context
+  return localStorage.getItem('authToken') || 'demo-token';
+};
+
 interface HeygenAvatarInstance {
   agentId: string;
   avatar: StreamingAvatar;
@@ -75,7 +85,14 @@ export const useNewConversationFlow = () => {
       store.setModeratorId(moderatorId);
 
       // Step 2: Generate agents in parallel
+      console.log('\n\n');
+      console.log('🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀');
       console.log('[New Flow] 🤖 Step 2: Generating AI agents...');
+      console.log('[New Flow] About to call: POST /api/sessions/' + sessionId + '/generate-agents');
+      console.log('[New Flow] Body:', { moderatorId, count: NUM_AI_AGENTS });
+      console.log('🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀');
+      console.log('\n\n');
+
       const startTime2 = Date.now();
       const agentsResponse = await fetch(`${API_URL}/api/sessions/${sessionId}/generate-agents`, {
         method: 'POST',
@@ -269,7 +286,10 @@ export const useNewConversationFlow = () => {
   };
 
   /**
-   * Speak with HeyGen avatar (generates audio via HeyGen TTS + lip-sync)
+   * Speak with HeyGen avatar using 11Labs audio + HeyGen lip-sync (HYBRID APPROACH)
+   * 1. Generate high-quality audio with ElevenLabs
+   * 2. Get public URL for the audio
+   * 3. Pass text + audioUrl to HeyGen for lip-sync animation
    */
   const speakWithHeygenAvatar = async (speakerId: string, text: string) => {
     const avatarInstance = heygenAvatars.current.get(speakerId);
@@ -280,14 +300,68 @@ export const useNewConversationFlow = () => {
     }
 
     try {
-      console.log(`[HeyGen] Speaking with avatar ${speakerId}: "${text.substring(0, 50)}..."`);
+      console.log(`[HeyGen Hybrid] 🎙️ Step 1: Generating 11Labs audio for ${speakerId}`);
 
-      // HeyGen will generate audio internally and animate the avatar
-      await avatarInstance.avatar.speak({ text });
+      // Get voiceId for this speaker
+      const state = useConversationStore.getState();
+      const speaker = state.speakers.find(s => s.id === speakerId);
+      const voiceId = speaker?.voiceId || 'moderator_voice'; // Default to moderator voice
 
-      // Note: We're not using ElevenLabs anymore - HeyGen handles both audio and video
+      console.log(`[HeyGen Hybrid] Using voiceId: ${voiceId}`);
+
+      const token = getAuthToken();
+      if (!token) throw new Error('Not authenticated');
+
+      // Generate audio with ElevenLabs and get public URL
+      const audioStartTime = Date.now();
+      const audioResponse = await fetch(`${API_URL}/api/audio/generate-url`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          text,
+          voiceId,
+        }),
+      });
+
+      if (!audioResponse.ok) {
+        console.warn(`[HeyGen Hybrid] Failed to generate 11Labs audio, falling back to HeyGen TTS`);
+        // Fallback: Use HeyGen's built-in TTS
+        await avatarInstance.avatar.speak({ text });
+        return;
+      }
+
+      const audioData = await audioResponse.json();
+      const audioUrl = audioData.data.audioUrl;
+      const audioElapsed = Date.now() - audioStartTime;
+
+      console.log(`[HeyGen Hybrid] ✅ 11Labs audio generated in ${audioElapsed}ms`);
+      console.log(`[HeyGen Hybrid] Audio URL: ${audioUrl}`);
+
+      // Step 2: Trigger HeyGen avatar with 11Labs audio for lip-sync
+      console.log(`[HeyGen Hybrid] 🎬 Step 2: Syncing HeyGen avatar with 11Labs audio`);
+      const syncStartTime = Date.now();
+
+      await avatarInstance.avatar.speak({
+        text,
+        audioInput: audioUrl, // Use 11Labs audio for lip-sync
+      });
+
+      const syncElapsed = Date.now() - syncStartTime;
+      console.log(`[HeyGen Hybrid] ✅ Avatar lip-sync completed in ${syncElapsed}ms`);
+      console.log(`[HeyGen Hybrid] 🎉 Hybrid playback complete (11Labs voice + HeyGen video)`);
+
     } catch (error) {
-      console.error(`[HeyGen] Failed to speak with avatar ${speakerId}:`, error);
+      console.error(`[HeyGen Hybrid] ❌ Failed to speak with avatar ${speakerId}:`, error);
+      // Last resort fallback: use HeyGen TTS only
+      try {
+        console.log(`[HeyGen Hybrid] Attempting fallback to HeyGen TTS only...`);
+        await avatarInstance.avatar.speak({ text });
+      } catch (fallbackError) {
+        console.error(`[HeyGen Hybrid] Fallback also failed:`, fallbackError);
+      }
     }
   };
 

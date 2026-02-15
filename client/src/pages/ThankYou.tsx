@@ -7,7 +7,7 @@ import PatientButton from '../components/ui/PatientButton';
 
 export default function ThankYou() {
   const navigate = useNavigate();
-  const { sessionId, turns } = useConversationStore();
+  const { turns } = useConversationStore();
   const [showConfetti, setShowConfetti] = useState(false);
 
   const firstName = 'there';
@@ -17,10 +17,6 @@ export default function ThankYou() {
     setShowConfetti(true);
     setTimeout(() => setShowConfetti(false), 3000);
   }, []);
-
-  const handleTakeQuiz = () => {
-    navigate('/quiz');
-  };
 
   const handleGoHome = () => {
     navigate('/home');
@@ -145,19 +141,8 @@ export default function ThankYou() {
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.6, duration: 0.6 }}
         >
-          <p
-            style={{ fontFamily: 'var(--font-sans)' }}
-            className="text-xl text-[var(--color-text-secondary)] mb-6"
-          >
-            Want to test your memory with a fun quiz?
-          </p>
-
-          <PatientButton onClick={handleTakeQuiz} variant="primary" size="large">
-            Take the Quiz!
-          </PatientButton>
-
-          <PatientButton onClick={handleGoHome} variant="secondary" size="medium">
-            Maybe Later
+          <PatientButton onClick={handleGoHome} variant="primary" size="large">
+            Back to Home
           </PatientButton>
         </motion.div>
 

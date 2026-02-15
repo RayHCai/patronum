@@ -221,6 +221,20 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
   setAgents: (agents) => {
     console.log('[ConversationStore] Setting agents:', agents.map(a => a.name).join(', '));
+    console.log('[ConversationStore] ==========================================');
+    console.log('[ConversationStore] AGENT DETAILS BEING STORED');
+    console.log('[ConversationStore] ==========================================');
+    agents.forEach((agent: Agent, index: number) => {
+      console.log(`[ConversationStore] Agent ${index + 1}:`, {
+        id: agent.id,
+        name: agent.name,
+        heygenAvatarId: agent.heygenAvatarId,
+        hasHeygenConfig: !!agent.heygenConfig,
+        heygenConfigType: typeof agent.heygenConfig,
+        heygenConfigAvatarId: agent.heygenConfig?.avatarId,
+        heygenConfigKeys: agent.heygenConfig ? Object.keys(agent.heygenConfig) : [],
+      });
+    });
     set({ agents });
   },
 
@@ -335,7 +349,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         type: 'moderator',
         name: 'Maya',
         speakerId: finalModeratorId,  // Store moderator ID
-        voiceId: 'uYXf8XasLslADfZ2MB4u', // Default moderator voice
+        voiceId: 'moderator_voice', // Moderator voice (Rachel - conversational)
       },
       // Index 1: User/Participant
       {

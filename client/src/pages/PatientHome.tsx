@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { usePatient } from '../contexts/PatientContext';
 import PatientButton from '../components/ui/PatientButton';
+import NeuralNetworkBackground from '../components/NeuralNetworkBackground';
 
 export default function PatientHome() {
   const navigate = useNavigate();
@@ -16,8 +17,11 @@ export default function PatientHome() {
 
   return (
     <div className="min-h-screen bg-[var(--color-bg-primary)] relative flex flex-col items-center justify-center p-8">
-      {/* Gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-red-50/30 via-white to-red-50/20 pointer-events-none" />
+      {/* Neural Network Animation Background */}
+      <NeuralNetworkBackground />
+
+      {/* Subtle gradient overlay for depth */}
+      <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-white/30 pointer-events-none" />
 
       <motion.div
         className="relative z-10 w-full max-w-3xl text-center"

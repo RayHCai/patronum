@@ -93,9 +93,23 @@ export function useHeygenAvatar(options: UseHeygenAvatarOptions): UseHeygenAvata
 
       avatar.on(StreamingEvents.STREAM_READY, (event) => {
         console.log(`[HeyGen Avatar ${agentId}] Stream ready`);
+        console.log(`[HeyGen Avatar ${agentId}] Stream details:`, {
+          hasEventStream: !!event.stream,
+          hasVideoRef: !!videoRef.current,
+          streamId: event.stream?.id,
+          streamActive: event.stream?.active,
+          streamTracks: event.stream?.getTracks?.().length,
+        });
+
         if (event.stream && videoRef.current) {
+          console.log(`[HeyGen Avatar ${agentId}] ✅ Attaching stream to video element`);
           videoRef.current.srcObject = event.stream;
           setStream(event.stream);
+        } else {
+          console.warn(`[HeyGen Avatar ${agentId}] ⚠️ Cannot attach stream:`, {
+            hasStream: !!event.stream,
+            hasVideoRef: !!videoRef.current,
+          });
         }
       });
 

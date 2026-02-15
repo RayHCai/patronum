@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mic, Check } from 'lucide-react';
+import { ArrowLeft, Mic, Check, ChefHat, Users, Music, Flower2, Baby, Palette, LucideIcon } from 'lucide-react';
 import { useConversationStore } from '../stores/conversationStore';
 import { usePatientStore } from '../stores/patientStore';
 import { usePatient } from '../contexts/PatientContext';
@@ -10,8 +10,48 @@ import { CSTTopic } from '../types';
 import { cstTopics } from '../data/topics';
 import PatientButton from '../components/ui/PatientButton';
 import PatientCard from '../components/ui/PatientCard';
+import NeuralNetworkBackground from '../components/NeuralNetworkBackground';
+
+// Icon mapping
+const iconMap: Record<string, LucideIcon> = {
+  ChefHat,
+  Users,
+  Music,
+  Flower2,
+  Baby,
+  Palette,
+};
 
 type SetupStep = 'topic' | 'mic-check';
+
+// Animation variants matching Landing page style
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08,
+      delayChildren: 0.15
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: {
+    opacity: 0,
+    y: 12,
+    filter: 'blur(6px)'
+  },
+  visible: {
+    opacity: 1,
+    y: 0,
+    filter: 'blur(0px)',
+    transition: {
+      duration: 0.45,
+      ease: [0.34, 1.56, 0.64, 1]
+    }
+  }
+};
 
 export default function ConversationSetup() {
   const navigate = useNavigate();
@@ -61,19 +101,25 @@ export default function ConversationSetup() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg-primary)] relative flex flex-col items-center justify-center p-8">
-      {/* Gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-red-50/30 via-white to-red-50/20 pointer-events-none" />
+    <div className="min-h-screen bg-[var(--color-bg-primary)] relative flex flex-col items-center justify-center p-8 overflow-hidden">
+      {/* Neural Network Animation Background */}
+      <NeuralNetworkBackground />
+
+      {/* Subtle gradient overlay for depth */}
+      <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-white/30 pointer-events-none" />
 
       {/* Back Button */}
       <motion.button
         style={{ fontFamily: 'var(--font-sans)' }}
-        className="absolute top-8 left-8 z-20 flex items-center gap-2 text-[15px] font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+        className="absolute top-8 left-8 z-20 flex items-center gap-2 px-4 py-2 rounded-xl text-[15px] font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-white/50 backdrop-blur-sm transition-all duration-200"
         onClick={() => step === 'topic' ? navigate(`/patient/${participantId}/home`) : setStep('topic')}
-        whileHover={{ x: -4 }}
-        whileTap={{ scale: 0.95 }}
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.4, delay: 0.1 }}
+        whileHover={{ x: -4, scale: 1.02 }}
+        whileTap={{ scale: 0.96 }}
       >
-        <ArrowLeft size={20} />
+        <ArrowLeft size={20} strokeWidth={2} />
         <span>Back</span>
       </motion.button>
 
@@ -82,60 +128,93 @@ export default function ConversationSetup() {
         {step === 'topic' && (
           <motion.div
             key="topic"
-            className="relative z-10 w-full max-w-5xl text-center"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
+            className="relative z-10 w-full max-w-6xl text-center"
+            initial="hidden"
+            animate="visible"
+            exit={{ opacity: 0, scale: 0.96, filter: 'blur(8px)' }}
             transition={{ duration: 0.4 }}
+            variants={containerVariants}
           >
-            <h1
-              style={{ fontFamily: 'var(--font-serif)' }}
-              className="text-5xl sm:text-6xl font-semibold text-[var(--color-text-primary)] mb-12 tracking-tight"
+            {/* Heading with gradient text effect */}
+            <motion.h1
+              className="text-6xl sm:text-7xl font-semibold leading-[0.95] tracking-tight mb-6"
+              style={{
+                fontFamily: 'var(--font-serif)',
+                background: 'linear-gradient(135deg, var(--color-text-primary) 0%, #4B5563 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text'
+              }}
+              variants={itemVariants}
             >
               Choose a Topic
-            </h1>
+            </motion.h1>
+
+            <motion.p
+              className="text-xl sm:text-2xl leading-relaxed text-[var(--color-text-secondary)] mb-16 max-w-3xl mx-auto"
+              style={{ fontFamily: 'var(--font-sans)' }}
+              variants={itemVariants}
+            >
+              Select a conversation topic that interests you today
+            </motion.p>
 
             {/* Topic Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-              {cstTopics.map((topic, index) => (
-                <motion.div
-                  key={topic.id}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: index * 0.1 }}
-                >
-                  <PatientCard
-                    variant="topic"
-                    selected={selectedTopic?.id === topic.id}
-                    onClick={() => handleTopicSelect(topic)}
+            <motion.div
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-16 mx-auto max-w-4xl justify-items-center"
+              variants={containerVariants}
+            >
+              {cstTopics.map((topic) => {
+                const IconComponent = iconMap[topic.icon];
+                return (
+                  <motion.div
+                    key={topic.id}
+                    variants={itemVariants}
+                    whileHover={{
+                      scale: 1.03,
+                      transition: { duration: 0.2, ease: 'easeOut' }
+                    }}
+                    whileTap={{ scale: 0.98 }}
                   >
-                    <div
-                      className="w-20 h-20 rounded-2xl flex items-center justify-center text-5xl"
-                      style={{ backgroundColor: topic.backgroundColor }}
+                    <PatientCard
+                      variant="topic"
+                      selected={selectedTopic?.id === topic.id}
+                      onClick={() => handleTopicSelect(topic)}
                     >
-                      {topic.iconEmoji}
-                    </div>
-                    <h3
-                      style={{ fontFamily: 'var(--font-sans)' }}
-                      className="text-xl font-semibold text-[var(--color-text-primary)] text-center px-2"
-                    >
-                      {topic.title}
-                    </h3>
-                  </PatientCard>
-                </motion.div>
-              ))}
-            </div>
+                      <div
+                        className="w-24 h-24 mx-auto rounded-3xl flex items-center justify-center shadow-sm transition-transform duration-300"
+                        style={{ backgroundColor: topic.backgroundColor }}
+                      >
+                        {IconComponent && (
+                          <IconComponent
+                            size={48}
+                            className="text-gray-700"
+                            strokeWidth={1.5}
+                          />
+                        )}
+                      </div>
+                      <h3
+                        style={{ fontFamily: 'var(--font-sans)' }}
+                        className="text-xl font-semibold text-[var(--color-text-primary)] text-center px-2 mt-1"
+                      >
+                        {topic.title}
+                      </h3>
+                    </PatientCard>
+                  </motion.div>
+                );
+              })}
+            </motion.div>
 
             {/* Next Button */}
             <AnimatePresence>
               {selectedTopic && (
                 <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 20 }}
+                  initial={{ opacity: 0, y: 12, filter: 'blur(6px)' }}
+                  animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                  exit={{ opacity: 0, y: -12, filter: 'blur(6px)' }}
+                  transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
                 >
-                  <PatientButton onClick={handleNextToMicCheck} variant="primary">
-                    Next →
+                  <PatientButton onClick={handleNextToMicCheck} variant="primary" size="large">
+                    Continue →
                   </PatientButton>
                 </motion.div>
               )}
@@ -147,110 +226,146 @@ export default function ConversationSetup() {
         {step === 'mic-check' && (
           <motion.div
             key="mic-check"
-            className="relative z-10 w-full max-w-2xl text-center"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
+            className="relative z-10 w-full max-w-3xl text-center"
+            initial="hidden"
+            animate="visible"
+            exit={{ opacity: 0, scale: 0.96, filter: 'blur(8px)' }}
             transition={{ duration: 0.4 }}
+            variants={containerVariants}
           >
-            <h1
-              style={{ fontFamily: 'var(--font-serif)' }}
-              className="text-5xl sm:text-6xl font-semibold text-[var(--color-text-primary)] mb-8 tracking-tight"
+            {/* Heading with gradient text effect */}
+            <motion.h1
+              className="text-6xl sm:text-7xl font-semibold leading-[0.95] tracking-tight mb-6"
+              style={{
+                fontFamily: 'var(--font-serif)',
+                background: 'linear-gradient(135deg, var(--color-text-primary) 0%, #4B5563 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text'
+              }}
+              variants={itemVariants}
             >
               Microphone Check
-            </h1>
+            </motion.h1>
 
             {!micPermissionGranted ? (
               <>
-                <p
+                <motion.p
                   style={{ fontFamily: 'var(--font-sans)' }}
-                  className="text-xl text-[var(--color-text-secondary)] mb-12 leading-relaxed"
+                  className="text-xl sm:text-2xl leading-relaxed text-[var(--color-text-secondary)] mb-16 max-w-2xl mx-auto"
+                  variants={itemVariants}
                 >
                   We need permission to use your microphone for the conversation
-                </p>
+                </motion.p>
 
-                <div className="mb-12">
+                <motion.div className="mb-16" variants={itemVariants}>
                   <motion.div
-                    className="inline-flex items-center justify-center w-32 h-32 bg-[var(--color-accent-light)] rounded-full mb-6"
-                    animate={{ scale: [1, 1.1, 1] }}
-                    transition={{ duration: 2, repeat: Infinity }}
+                    className="inline-flex items-center justify-center w-40 h-40 bg-gradient-to-br from-[var(--color-accent-light)] to-[var(--color-accent-light)]/50 rounded-full shadow-xl mb-8"
+                    animate={{ scale: [1, 1.05, 1] }}
+                    transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
                   >
-                    <Mic size={64} className="text-[var(--color-accent)]" />
+                    <Mic size={72} className="text-[var(--color-accent)]" strokeWidth={1.5} />
                   </motion.div>
-                </div>
+                </motion.div>
 
-                <PatientButton onClick={handleRequestMicPermission} variant="primary">
-                  Allow Microphone
-                </PatientButton>
+                <motion.div variants={itemVariants}>
+                  <PatientButton onClick={handleRequestMicPermission} variant="primary" size="large">
+                    Allow Microphone
+                  </PatientButton>
+                </motion.div>
               </>
             ) : !micTested ? (
               <>
-                <p
+                <motion.p
                   style={{ fontFamily: 'var(--font-sans)' }}
-                  className="text-xl text-[var(--color-text-secondary)] mb-12 leading-relaxed"
+                  className="text-xl sm:text-2xl leading-relaxed text-[var(--color-text-secondary)] mb-16 max-w-2xl mx-auto"
+                  variants={itemVariants}
                 >
                   {isTestingMic ? 'Testing your microphone...' : 'Please say "hello"'}
-                </p>
+                </motion.p>
 
-                <div className="mb-12">
+                <motion.div className="mb-16" variants={itemVariants}>
                   <motion.div
-                    className="inline-flex items-center justify-center w-32 h-32 bg-[var(--color-accent-light)] rounded-full"
+                    className="inline-flex items-center justify-center w-40 h-40 bg-gradient-to-br from-[var(--color-accent-light)] to-[var(--color-accent-light)]/50 rounded-full shadow-xl relative"
                     animate={{
-                      scale: isTestingMic ? [1, 1.2, 1] : 1,
+                      scale: isTestingMic ? [1, 1.15, 1] : 1,
                     }}
-                    transition={{ duration: 0.5, repeat: isTestingMic ? Infinity : 0 }}
+                    transition={{ duration: 0.6, repeat: isTestingMic ? Infinity : 0, ease: 'easeInOut' }}
                   >
-                    <Mic size={64} className="text-[var(--color-accent)]" />
+                    {isTestingMic && (
+                      <>
+                        <motion.div
+                          className="absolute inset-0 rounded-full border-4 border-[var(--color-accent)]"
+                          animate={{ scale: [1, 1.5], opacity: [0.8, 0] }}
+                          transition={{ duration: 1.5, repeat: Infinity, ease: 'easeOut' }}
+                        />
+                        <motion.div
+                          className="absolute inset-0 rounded-full border-4 border-[var(--color-accent)]"
+                          animate={{ scale: [1, 1.5], opacity: [0.8, 0] }}
+                          transition={{ duration: 1.5, repeat: Infinity, ease: 'easeOut', delay: 0.5 }}
+                        />
+                      </>
+                    )}
+                    <Mic size={72} className="text-[var(--color-accent)]" strokeWidth={1.5} />
                   </motion.div>
-                </div>
+                </motion.div>
 
                 {isTestingMic && (
-                  <p
+                  <motion.p
                     style={{ fontFamily: 'var(--font-sans)' }}
                     className="text-lg text-[var(--color-text-secondary)]"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.4 }}
                   >
                     Listening...
-                  </p>
+                  </motion.p>
                 )}
               </>
             ) : (
               <>
                 <motion.div
-                  className="mb-12"
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: 'spring', stiffness: 200 }}
+                  className="mb-16"
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: 'spring', stiffness: 200, damping: 15 }}
                 >
-                  <div className="inline-flex items-center justify-center w-32 h-32 bg-[var(--color-accent-light)] rounded-full mb-6">
-                    <Check size={64} className="text-[var(--color-accent)]" />
+                  <div className="inline-flex items-center justify-center w-40 h-40 bg-gradient-to-br from-green-100 to-green-50 rounded-full shadow-xl mb-8">
+                    <Check size={72} className="text-green-600" strokeWidth={2.5} />
                   </div>
                   <p
                     style={{ fontFamily: 'var(--font-sans)' }}
-                    className="text-xl text-[var(--color-accent)] font-semibold"
+                    className="text-2xl text-green-600 font-semibold"
                   >
                     Perfect! We can hear you loud and clear!
                   </p>
                 </motion.div>
 
-                <PatientButton onClick={handleStartConversation} variant="primary">
-                  I'm Ready to Chat!
-                </PatientButton>
+                <motion.div
+                  initial={{ opacity: 0, y: 12, filter: 'blur(6px)' }}
+                  animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                  transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1], delay: 0.2 }}
+                >
+                  <PatientButton onClick={handleStartConversation} variant="primary" size="large">
+                    I'm Ready to Chat!
+                  </PatientButton>
+                </motion.div>
               </>
             )}
 
             {/* Troubleshooting hint */}
             {micPermissionGranted && !micTested && !isTestingMic && (
               <motion.div
-                className="mt-8 p-6 bg-[var(--color-accent-light)] rounded-2xl border border-[var(--color-border)]"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 3 }}
+                className="mt-12 p-8 bg-white/80 backdrop-blur-sm rounded-3xl border border-[var(--color-border)] shadow-lg"
+                initial={{ opacity: 0, y: 12, filter: 'blur(6px)' }}
+                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                transition={{ delay: 3, duration: 0.6, ease: [0.34, 1.56, 0.64, 1] }}
               >
                 <p
                   style={{ fontFamily: 'var(--font-sans)' }}
-                  className="text-[15px] text-[var(--color-accent)] font-medium"
+                  className="text-lg text-[var(--color-text-secondary)] font-medium"
                 >
-                  💡 Tip: Speak clearly and move closer to your device
+                  <span className="text-[var(--color-accent)] font-semibold">Tip:</span> Speak clearly and move closer to your device
                 </p>
               </motion.div>
             )}

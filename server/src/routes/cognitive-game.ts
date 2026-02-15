@@ -1,7 +1,7 @@
 // Cognitive Game routes
 import { Router } from 'express';
 import { generateCognitiveGame, GameType } from '../services/cognitiveGameFactory';
-import { prisma } from '../index';
+import { prisma } from '../prisma/client';
 
 const router = Router();
 
@@ -45,7 +45,6 @@ router.post('/start', async (req, res, next) => {
     const GAME_TYPES: GameType[] = [
       'memory_recall',
       'pattern_recognition',
-      'word_association',
       'image_matching'
     ];
 
@@ -53,7 +52,9 @@ router.post('/start', async (req, res, next) => {
     console.log(`[Cognitive Game] Randomly selected game type: ${randomGameType}`);
 
     // Generate questions
+    console.log(`[Cognitive Game] Calling generateCognitiveGame with sessionId: ${sessionId}, gameType: ${randomGameType}, count: ${questionCount}`);
     const questions = await generateCognitiveGame(sessionId, randomGameType, questionCount);
+    console.log(`[Cognitive Game] Successfully generated ${questions.length} questions`);
 
     res.status(200).json({
       success: true,
@@ -63,9 +64,19 @@ router.post('/start', async (req, res, next) => {
         questions
       }
     });
-  } catch (error) {
-    console.error('[Cognitive Game] Failed to start game:', error);
-    next(error);
+  } catch (error: any) {
+    console.error('[Cognitive Game] ========================================');
+    console.error('[Cognitive Game] ERROR STARTING GAME');
+    console.error('[Cognitive Game] ========================================');
+    console.error('[Cognitive Game] Error message:', error.message);
+    console.error('[Cognitive Game] Error stack:', error.stack);
+    console.error('[Cognitive Game] Full error:', error);
+
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to generate cognitive game',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
