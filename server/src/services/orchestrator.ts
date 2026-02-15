@@ -3,6 +3,7 @@
 import { prisma } from '../prisma/client';
 import { generateAgentPersonalities } from './aiPatient';
 import { generateAgents } from './agent';
+import { NUM_AI_AGENTS } from '../constants/config';
 
 /**
  * Start a new conversation session
@@ -38,9 +39,11 @@ export const startConversationSession = async (
     });
     console.log(`[Orchestrator] Found ${agents.length} matching agents`);
   } else {
-    console.log(`[Orchestrator] Fetching all agents for participant ${participantId}...`);
+    console.log(`[Orchestrator] Fetching agents for participant ${participantId} (limit: ${NUM_AI_AGENTS})...`);
     agents = await prisma.agent.findMany({
       where: { participantId },
+      take: NUM_AI_AGENTS,
+      orderBy: { createdAt: 'asc' }, // Get the oldest/first agents created
     });
     console.log(`[Orchestrator] Found ${agents.length} existing agents`);
   }
@@ -54,7 +57,7 @@ export const startConversationSession = async (
     const personalities = await generateAgentPersonalities(
       participant.notes || '',
       topic || 'general conversation',
-      5
+      NUM_AI_AGENTS
     );
 
     // If AI generation failed, fall back to default generation
@@ -63,7 +66,7 @@ export const startConversationSession = async (
       agents = await generateAgents({
         participantId,
         participantBackground: participant.notes || '',
-        count: 5,
+        count: NUM_AI_AGENTS,
       });
     } else {
       // Create agents in database with AI-generated personalities

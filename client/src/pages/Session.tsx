@@ -1,7 +1,7 @@
-// Session page - Conversational chat interface
+// Session page - Professional conversation interface with bubbles
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Users } from 'lucide-react';
+import { X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useConversationStore } from '../stores/conversationStore';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -10,10 +10,11 @@ import { useMicrophone } from '../hooks/useMicrophone';
 import { useConversationFlow } from '../hooks/useConversationFlow';
 import { usePatient } from '../contexts/PatientContext';
 import MicrophoneBar from '../components/session/MicrophoneBar';
-import ChatBubble from '../components/session/ChatBubble';
+import AnimatedBubble from '../components/session/AnimatedBubble';
 import GameChoiceScreen from '../components/session/GameChoiceScreen';
 import CognitiveGame from '../components/session/CognitiveGame';
 import { GameAnswer } from '../types/cognitiveGame';
+import { LoadingScreen, Subtitle } from '../components/ui';
 
 export default function Session() {
   const navigate = useNavigate();
@@ -37,6 +38,7 @@ export default function Session() {
     setCognitiveGameQuestions,
     startGame,
     clearGameState,
+    speakerIndices,
   } = useConversationStore();
   const { isConnected, sendMessage, on, off } = useWebSocket();
   const { enqueue: enqueueAudio } = useAudioPlayback();
@@ -48,6 +50,13 @@ export default function Session() {
   const accumulatedTranscriptRef = useRef(''); // Ref to track accumulated transcript for closures
   const [isLoading, setIsLoading] = useState(true); // Start loading immediately
   const [loadingMessage, setLoadingMessage] = useState('Preparing your conversation...');
+
+  // Subtitle state - tracks current speaking turn
+  const [currentSubtitle, setCurrentSubtitle] = useState<{
+    speakerName: string;
+    content: string;
+    speakerColor?: string;
+  } | null>(null);
 
   const { transcript, interimResult, startListening, stopListening, isListening } = useMicrophone({
     onTranscript: (text) => {
@@ -84,6 +93,11 @@ export default function Session() {
   // Filter turns to only show moderator and user messages
   const displayedTurns = turns.filter(turn =>
     turn.speakerType === 'moderator' || turn.speakerType === 'participant'
+  );
+
+  // Filter agents to only show those in the speaker rotation (not all stored agents)
+  const activeAgents = agents.filter(agent =>
+    speakerIndices.some(speaker => speaker.type === 'agent' && speaker.speakerId === agent.id)
   );
 
   // Ref for auto-scrolling chat
@@ -165,18 +179,28 @@ export default function Session() {
           console.log('[Session] 📤 Enqueueing audio for playback');
           setMicState('speaking');
 
-          // Track current speaker for audio
+          // Track current speaker and subtitle
           if (turnData) {
             if (turnData.speakerType === 'agent') {
               setCurrentSpeakerId(turnData.speakerId || null);
             } else if (turnData.speakerType === 'moderator') {
               setCurrentSpeakerId('moderator');
+            } else if (turnData.speakerType === 'participant') {
+              setCurrentSpeakerId('participant');
             }
+
+            // Set subtitle for current speaker
+            setCurrentSubtitle({
+              speakerName: turnData.speakerName,
+              content: turnData.content,
+              speakerColor: turnData.avatarColor || '#8B0000',
+            });
           }
 
           enqueueAudio(audioUrl, id, () => {
             console.log('[Session] Audio finished');
             setCurrentSpeakerId(null);
+            setCurrentSubtitle(null); // Clear subtitle when audio ends
             onComplete();
           });
         },
@@ -279,7 +303,7 @@ export default function Session() {
     }
   }, [interimResult, accumulatedTranscript, isListening]);
 
-  // Live transcript is displayed in the chat interface, no need for subtitle
+  // No subtitle - removed per user request
 
   // Handle manually stopping recording
   const handleStopRecording = () => {
@@ -423,18 +447,28 @@ export default function Session() {
         console.log('[Session] Enqueueing audio from user turn response');
         setMicState('speaking');
 
-        // Track current speaker for audio
+        // Track current speaker and subtitle
         if (turnData) {
           if (turnData.speakerType === 'agent') {
             setCurrentSpeakerId(turnData.speakerId || null);
           } else if (turnData.speakerType === 'moderator') {
             setCurrentSpeakerId('moderator');
+          } else if (turnData.speakerType === 'participant') {
+            setCurrentSpeakerId('participant');
           }
+
+          // Set subtitle for current speaker
+          setCurrentSubtitle({
+            speakerName: turnData.speakerName,
+            content: turnData.content,
+            speakerColor: turnData.avatarColor || '#8B0000',
+          });
         }
 
         enqueueAudio(audioUrl, id, () => {
           console.log('[Session] Audio finished');
           setCurrentSpeakerId(null);
+          setCurrentSubtitle(null); // Clear subtitle when audio ends
           onComplete();
         });
       });
@@ -597,33 +631,13 @@ export default function Session() {
   // Loading screen
   if (isLoading) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center bg-[#FAFAFA] relative">
-        {/* Whiteboard dot grid background - subtle */}
-        <div
-          className="absolute inset-0 opacity-[0.15] pointer-events-none"
-          style={{
-            backgroundImage: 'radial-gradient(circle, #d1d5db 0.5px, transparent 0.5px)',
-            backgroundSize: '20px 20px',
-          }}
-        />
-        <div className="text-center relative z-10">
-          <div className="mb-8">
-            <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-[var(--color-accent)] border-t-transparent"></div>
-          </div>
-          <h2
-            style={{ fontFamily: 'var(--font-serif)' }}
-            className="text-3xl font-semibold text-[var(--color-text-primary)] mb-4"
-          >
-            {loadingMessage || 'Loading...'}
-          </h2>
-          <p
-            style={{ fontFamily: 'var(--font-sans)' }}
-            className="text-lg text-[var(--color-text-secondary)]"
-          >
-            This will just take a moment
-          </p>
-        </div>
-      </div>
+      <LoadingScreen
+        mode="fullscreen"
+        size="large"
+        message={loadingMessage || 'Loading...'}
+        subtitle="This will just take a moment"
+        backgroundType="neural"
+      />
     );
   }
 
@@ -647,35 +661,28 @@ export default function Session() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-[var(--color-bg-primary)] relative overflow-hidden">
+    <div className="h-screen flex flex-col bg-[var(--color-bg-primary)] relative">
       {/* Soft gradient background - matching landing page */}
       <div className="absolute inset-0 bg-gradient-to-br from-red-50/30 via-white to-red-50/20 pointer-events-none" />
 
-      {/* Header - Glassmorphism style matching admin pages */}
-      <motion.header
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="relative z-20 flex items-center justify-between px-8 py-5 border-b border-gray-200 bg-white/80 backdrop-blur-sm"
-      >
+      {/* Subtle grid pattern */}
+      <div
+        className="absolute inset-0 opacity-[0.2] pointer-events-none"
+        style={{
+          backgroundImage: 'radial-gradient(circle, #000000 0.5px, transparent 0.5px)',
+          backgroundSize: '24px 24px',
+        }}
+      />
+
+      {/* Header - matching admin pages */}
+      <header className="relative z-20 flex items-center justify-between px-8 py-5 border-b border-gray-200 bg-white/80 backdrop-blur-sm">
         <div className="flex items-center gap-4">
           <h1
             style={{ fontFamily: 'var(--font-serif)' }}
             className="text-xl font-bold tracking-tight text-gray-900"
           >
-            {topic.iconEmoji} {topic.title}
+            {topic.title}
           </h1>
-
-          {/* Agent count badge */}
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full">
-            <Users size={14} className="text-emerald-700" />
-            <span
-              className="text-xs font-semibold text-emerald-700"
-              style={{ fontFamily: 'var(--font-sans)' }}
-            >
-              {agents.length} {agents.length === 1 ? 'Agent' : 'Agents'}
-            </span>
-          </div>
         </div>
 
         <button
@@ -686,89 +693,88 @@ export default function Session() {
           <X size={16} strokeWidth={2.5} />
           End Conversation
         </button>
-      </motion.header>
+      </header>
 
-      {/* Main Content - Chat Messages */}
-      <div className="relative z-10 flex-1 overflow-y-auto px-8 py-6">
-        <div className="max-w-4xl mx-auto">
-          {/* Welcome message */}
-          {displayedTurns.length === 0 && !isListening && (
+      {/* Main Content - Avatar Bubbles in Horizontal Line */}
+      <div className="relative z-10 flex-1 overflow-hidden">
+        <div className="w-full h-full flex items-center justify-center p-8">
+          <div className="flex items-center gap-12">
+            {/* Moderator Bubble */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="text-center py-12"
-            >
-              <div className="mb-4">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-100 rounded-full">
-                  <Users size={32} className="text-emerald-700" />
-                </div>
-              </div>
-              <h2
-                style={{ fontFamily: 'var(--font-serif)' }}
-                className="text-2xl font-semibold text-gray-900 mb-2"
-              >
-                Welcome to your conversation
-              </h2>
-              <p
-                style={{ fontFamily: 'var(--font-sans)' }}
-                className="text-gray-600"
-              >
-                You'll be chatting with Maya and {agents.length} AI {agents.length === 1 ? 'agent' : 'agents'}
-              </p>
-            </motion.div>
-          )}
-
-          {/* Chat messages */}
-          {displayedTurns.map((turn, index) => (
-            <ChatBubble
-              key={`${turn.sequenceNumber}-${index}`}
-              speaker={turn.speakerName}
-              message={turn.content}
-              isModerator={turn.speakerType === 'moderator'}
-              isUser={turn.speakerType === 'participant'}
-              timestamp={turn.timestamp ? new Date(turn.timestamp) : undefined}
-            />
-          ))}
-
-          {/* Live user input bubble while speaking */}
-          {isListening && liveTranscript && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
+              className="flex flex-col items-center gap-3"
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex justify-end mb-4"
+              transition={{ delay: 0.1, duration: 0.5 }}
             >
-              <div className="max-w-[70%] items-end flex flex-col gap-1">
-                <span
-                  className="text-xs font-medium px-2 text-blue-600"
-                  style={{ fontFamily: 'var(--font-sans)' }}
-                >
-                  You (typing...)
-                </span>
-                <div
-                  className="rounded-2xl px-5 py-3 bg-blue-500 text-white rounded-tr-sm shadow-sm"
-                  style={{ fontFamily: 'var(--font-sans)' }}
-                >
-                  <p className="text-[15px] leading-relaxed">{liveTranscript}</p>
-                </div>
-              </div>
+              <AnimatedBubble
+                name="Maya"
+                color="#8B0000"
+                size={120}
+                isActive={currentSpeakerId === 'moderator'}
+              />
+              <span className="text-sm font-medium text-gray-600" style={{ fontFamily: 'var(--font-sans)' }}>
+                Moderator
+              </span>
             </motion.div>
-          )}
 
-          {/* Auto-scroll anchor */}
-          <div ref={chatEndRef} />
+            {/* Agent Bubbles */}
+            {activeAgents.map((agent, index) => (
+              <motion.div
+                key={agent.id}
+                className="flex flex-col items-center gap-3"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 + index * 0.1, duration: 0.5 }}
+              >
+                <AnimatedBubble
+                  name={agent.name}
+                  color={agent.avatarColor || '#6366f1'}
+                  size={120}
+                  isActive={currentSpeakerId === agent.id}
+                />
+                <span className="text-sm font-medium text-gray-600" style={{ fontFamily: 'var(--font-sans)' }}>
+                  {agent.name}
+                </span>
+              </motion.div>
+            ))}
+
+            {/* User Bubble */}
+            <motion.div
+              className="flex flex-col items-center gap-3"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 + activeAgents.length * 0.1, duration: 0.5 }}
+            >
+              <AnimatedBubble
+                name={participant.name || 'You'}
+                color="#4B5563"
+                size={120}
+                isActive={currentSpeakerId === 'participant' || isListening}
+              />
+              <span className="text-sm font-medium text-gray-600" style={{ fontFamily: 'var(--font-sans)' }}>
+                You
+              </span>
+            </motion.div>
+          </div>
         </div>
       </div>
 
-      {/* Microphone Bar - Fixed at bottom */}
-      <div className="relative z-10">
-        <MicrophoneBar
-          micState={micState}
-          transcript={liveTranscript}
-          onStopRecording={handleStopRecording}
-          onReturnToRecording={handleReturnToRecording}
-          onConfirmTranscript={handleConfirmTranscript}
-        />
-      </div>
+      {/* Subtitle Display */}
+      <Subtitle
+        speakerName={currentSubtitle?.speakerName}
+        content={currentSubtitle?.content}
+        speakerColor={currentSubtitle?.speakerColor}
+        isVisible={!!currentSubtitle}
+      />
+
+      {/* Microphone Bar */}
+      <MicrophoneBar
+        micState={micState}
+        transcript={liveTranscript}
+        onStopRecording={handleStopRecording}
+        onReturnToRecording={handleReturnToRecording}
+        onConfirmTranscript={handleConfirmTranscript}
+      />
 
       {/* Game Screens */}
       <AnimatePresence mode="wait">

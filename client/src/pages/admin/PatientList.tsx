@@ -5,6 +5,7 @@ import { Search, Plus, TrendingUp, TrendingDown, Minus, AlertCircle, Clock, Sett
 import { motion } from 'framer-motion';
 import { Participant } from '../../types';
 import { getAllParticipants } from '../../services/participants';
+import { LoadingScreen } from '../../components/ui';
 
 // Animation variants
 const fadeIn = {
@@ -142,14 +143,12 @@ export default function PatientList() {
             </motion.div>
 
             {isLoading ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="text-center">
-                <div className="inline-block h-10 w-10 animate-spin rounded-full border-4 border-solid border-[var(--color-accent)] border-r-transparent"></div>
-                <p className="mt-3 text-sm text-gray-600" style={{ fontFamily: 'var(--font-sans)' }}>
-                  Loading patients...
-                </p>
-              </div>
-            </div>
+            <LoadingScreen
+              mode="inline"
+              size="medium"
+              message="Loading patients..."
+              subtitle=""
+            />
           ) : error ? (
             <div className="bg-white border border-red-200 rounded-xl p-8 text-center shadow-sm">
               <p className="text-red-900 font-semibold mb-2" style={{ fontFamily: 'var(--font-sans)' }}>

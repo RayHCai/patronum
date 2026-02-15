@@ -6,7 +6,7 @@ import { getHeygenService, HeygenAvatarConfig } from './heygen';
 // Placeholder agent generator (will be replaced with Claude API in Phase 6)
 const generateAgentProfiles = async (
   participantBackground: string,
-  count: number = 5
+  count: number = 2
 ) => {
   // Mock agent profiles for now
   // In Phase 6, this will use Claude API to generate personalized agents
@@ -102,7 +102,7 @@ const generateAgentProfiles = async (
 };
 
 export const generateAgents = async (data: GenerateAgentsDTO) => {
-  const { participantId, participantBackground = '', count = 5 } = data;
+  const { participantId, participantBackground = '', count = 2 } = data;
 
   console.log(`[Agent Service] generateAgents called - participantId: ${participantId}, count: ${count}`);
 
