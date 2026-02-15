@@ -15,7 +15,14 @@ export default function FloatingSubtitle({
   isVisible,
 }: FloatingSubtitleProps) {
   // Split text into words for animation
-  const words = useMemo(() => text.split(' '), [text]);
+  const words = useMemo(() => {
+    const allWords = text.split(' ');
+    // Only show the last 15 words
+    if (allWords.length > 15) {
+      return ['...', ...allWords.slice(-15)];
+    }
+    return allWords;
+  }, [text]);
 
   // Get initials for mini avatar
   const initials = useMemo(() => {
@@ -141,9 +148,9 @@ export default function FloatingSubtitle({
                 prefersReducedMotion
                   ? {}
                   : {
-                      scale: [1, 1.3, 1],
-                      opacity: [0.7, 1, 0.7],
-                    }
+                    scale: [1, 1.3, 1],
+                    opacity: [0.7, 1, 0.7],
+                  }
               }
               transition={{
                 duration: 1.5,

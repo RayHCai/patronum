@@ -28,19 +28,16 @@ export const useConversationFlow = () => {
   const { determineNextSpeaker, getSpeakerByIndex } = useSpeakerDetermination();
   const {
     requestText,
-    preComputeText,
-    getCachedText,
     clearCache: clearTextCache,
+    getCachedText,
   } = useTextGeneration();
   const {
     fetchAudio,
-    prefetchAudio,
-    getCachedAudio,
     clearCache: clearAudioCache,
+    getCachedAudio,
   } = useAudioFetcher();
   const {
     initializeStream,
-    preInitializeStream,
     touchStream,
   } = useVideoStreamManager();
 
@@ -133,24 +130,19 @@ export const useConversationFlow = () => {
         console.log(`[Conversation Flow] ▶️ Executing turn for ${speaker.name} (index ${nextIndex}, type: ${speaker.type})`);
 
         // 1. Get text (from cache or fetch)
-        console.log(`[Conversation Flow] 📝 Step 1: Getting text for ${speaker.name}`);
-        let text = getCachedText(nextIndex);
-        let returnToUser: boolean | undefined = undefined;
+        // 1. Get text (Always fetch fresh, ignoring cache as requested)
+        console.log(`[Conversation Flow] 📝 Step 1: Generating fresh text for ${speaker.name}`);
 
-        if (!text) {
-          console.log(`[Conversation Flow] 🔍 Cache miss, requesting text from server for ${speaker.name}`);
-          const startTime = Date.now();
-          const response = await requestText(nextIndex);
-          text = response.content;
-          returnToUser = response.returnToUser;
-          const elapsed = Date.now() - startTime;
-          console.log(`[Conversation Flow] ✅ Text generated in ${elapsed}ms:`, text.substring(0, 100) + '...');
-          if (returnToUser !== undefined) {
-            console.log(`[Conversation Flow] Server says returnToUser: ${returnToUser}`);
-          }
-        } else {
-          console.log(`[Conversation Flow] ✨ Cache hit! Using cached text for ${speaker.name}`);
-          console.log(`[Conversation Flow] Cached text preview:`, text.substring(0, 100) + '...');
+        // Force fresh generation
+        const startTime = Date.now();
+        const response = await requestText(nextIndex);
+        const text = response.content;
+        const returnToUser = response.returnToUser;
+
+        const elapsed = Date.now() - startTime;
+        console.log(`[Conversation Flow] ✅ Text generated in ${elapsed}ms:`, text.substring(0, 100) + '...');
+        if (returnToUser !== undefined) {
+          console.log(`[Conversation Flow] Server says returnToUser: ${returnToUser}`);
         }
 
         // 2. Determine next speaker based on server response or content
@@ -200,7 +192,7 @@ export const useConversationFlow = () => {
 
           // Special case: When moderator asks a question to the user (and NOT to an agent)
           if (nextIndex === 0 && text.includes('?') && !agentMentioned &&
-              (text.toLowerCase().includes('you') || text.toLowerCase().includes('your'))) {
+            (text.toLowerCase().includes('you') || text.toLowerCase().includes('your'))) {
             // Moderator is asking the user a question - go to user
             nextNextIndex = 1;
             console.log(`[Conversation Flow] 🎤 Moderator asked user a question → routing to user (index 1)`);
@@ -352,9 +344,7 @@ export const useConversationFlow = () => {
       store,
       getSpeakerByIndex,
       determineNextSpeaker,
-      getCachedText,
       requestText,
-      getCachedAudio,
       fetchAudio,
       touchStream,
     ]
@@ -364,65 +354,33 @@ export const useConversationFlow = () => {
    * Pre-compute next turn (text and audio) while current audio plays
    */
   const preComputeNextTurn = useCallback(() => {
+    // Caching disabled per user request
+    console.log('[Conversation Flow] Pre-computation skipped (caching disabled)');
+    return;
+
+    /* Original pre-computation logic preserved for reference but disabled
     // Get fresh state to avoid stale closure issues
     const freshState = useConversationStore.getState();
     const nextIndex = freshState.nextSpeakerIndex;
-    const speaker = getSpeakerByIndex(nextIndex);
-
-    if (!speaker || speaker.type === 'user') {
-      console.log('[Conversation Flow] Next speaker is user, skipping pre-computation');
-      return;
-    }
-
-    console.log(`[Conversation Flow] Pre-computing next turn for ${speaker.name} (index ${nextIndex})`);
-
-    // Pre-compute text in background
-    preComputeText(nextIndex);
-
-    // Pre-fetch audio will happen after text is cached
-    setTimeout(() => {
-      const text = getCachedText(nextIndex);
-      if (text && speaker.voiceId) {
-        console.log(`[Conversation Flow] Pre-fetching audio for ${speaker.name}`);
-        prefetchAudio(text, speaker.voiceId);
-      }
-    }, 1000); // Wait 1 second for text to be cached
-
-    // Pre-initialize video stream for next speaker (if agent and has HeyGen config)
-    if (speaker.agentId && speaker.type === 'agent') {
-      console.log(`[Conversation Flow] Pre-initializing video stream for ${speaker.name}`);
-      preInitializeStream(speaker.agentId);
-    }
-  }, [getSpeakerByIndex, preComputeText, getCachedText, prefetchAudio, preInitializeStream]);
+    ...
+    */
+  }, []);
 
   /**
    * Start pre-computing the next agent's response while user is speaking
    * This is called when user starts speaking (not after they finish)
    */
   const startPreComputingDuringUserSpeech = useCallback(() => {
+    // Caching disabled per user request
+    console.log('[Conversation Flow] Pre-computation during user speech skipped (caching disabled)');
+    return;
+
+    /* Original logic disabled
     // After user speaks, we always go to agent at index 2 (first agent)
     const nextAgentIndex = 2;
-    const speaker = getSpeakerByIndex(nextAgentIndex);
-
-    if (!speaker || speaker.type === 'user') {
-      console.log('[Conversation Flow] Cannot pre-compute during user speech - invalid next speaker');
-      return;
-    }
-
-    console.log(`[Conversation Flow] Pre-computing ${speaker.name}'s response WHILE user is speaking`);
-
-    // Pre-compute text in background (using current conversation state, NOT what user is saying now)
-    preComputeText(nextAgentIndex);
-
-    // Pre-fetch audio after text is generated
-    setTimeout(() => {
-      const text = getCachedText(nextAgentIndex);
-      if (text && speaker.voiceId) {
-        console.log(`[Conversation Flow] Pre-fetching audio for ${speaker.name} while user speaks`);
-        prefetchAudio(text, speaker.voiceId);
-      }
-    }, 2000); // Wait 2 seconds for text generation to complete
-  }, [getSpeakerByIndex, preComputeText, getCachedText, prefetchAudio]);
+    ...
+    */
+  }, []);
 
   /**
    * Move to next speaker
@@ -600,8 +558,8 @@ export const useConversationFlow = () => {
       // Filter agents that have BOTH an ID and a valid (non-empty) heygenAvatarId
       const agentsWithVideo = agents.filter(agent => {
         const hasValidConfig = agent.id &&
-                               agent.heygenAvatarId &&
-                               agent.heygenAvatarId.trim().length > 0;
+          agent.heygenAvatarId &&
+          agent.heygenAvatarId.trim().length > 0;
 
         if (agent.id && !hasValidConfig) {
           console.log(`[Conversation Flow]   ⏭️ Skipping ${agent.name} - no valid HeyGen avatar ID`);
