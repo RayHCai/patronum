@@ -34,18 +34,38 @@ export const useSpeakerDetermination = () => {
     const maxIndex = speakerIndices.length - 1;
     console.log('[Speaker Determination] Total speakers:', speakerIndices.length);
 
+    // RULE 0: Never allow the same speaker to speak twice in a row
+    // This prevents turn violations and ensures proper turn-taking
+    const validateNextSpeaker = (nextIndex: number): number => {
+      if (nextIndex === currentIndex) {
+        console.log(`[Next Speaker] ⚠️ TURN VIOLATION PREVENTED: Speaker ${currentIndex} cannot speak twice in a row`);
+        // Move to next speaker in sequence
+        let validIndex = nextIndex + 1;
+        if (validIndex > maxIndex) {
+          validIndex = 0; // Wrap to moderator
+        }
+        // If still same speaker (shouldn't happen), keep incrementing
+        while (validIndex === currentIndex && validIndex <= maxIndex) {
+          validIndex++;
+        }
+        console.log(`[Next Speaker] ✅ Redirected to speaker ${validIndex} instead`);
+        return validIndex;
+      }
+      return nextIndex;
+    };
+
     // RULE 1: Moderator interjection every 5 turns
     // If moderator hasn't spoken in 5 turns, they should interject to move conversation along
     if (turnsSinceModeratorSpoke >= 5) {
       console.log(`[Next Speaker] Moderator hasn't spoken in ${turnsSinceModeratorSpoke} turns, moderator interjecting (index 0)`);
-      return 0;
+      return validateNextSpeaker(0);
     }
 
     // RULE 2: User must speak at least once every 5 turns
     // Ensure user participation doesn't drop too low
     if (turnsSinceUserSpoke >= 5) {
       console.log(`[Next Speaker] User hasn't spoken in ${turnsSinceUserSpoke} turns, going to user (index 1)`);
-      return 1;
+      return validateNextSpeaker(1);
     }
 
     // RULE 3: User should speak at most 3 times in any 5-turn window
@@ -58,7 +78,7 @@ export const useSpeakerDetermination = () => {
         nextIndex = 2; // Go to first agent
       }
       console.log(`[Next Speaker] Skipping user, going to agent at index ${nextIndex}`);
-      return nextIndex;
+      return validateNextSpeaker(nextIndex);
     }
 
     // RULE 4: Content-based routing - Check if content mentions the moderator/guide
@@ -72,7 +92,7 @@ export const useSpeakerDetermination = () => {
           content.toLowerCase().includes('what if we')))
     ) {
       console.log(`[Next Speaker] Content addresses or questions the moderator, going to moderator (index 0)`);
-      return 0;
+      return validateNextSpeaker(0);
     }
 
     // RULE 5: Content-based routing - Check if content mentions any specific agent by name
@@ -90,7 +110,7 @@ export const useSpeakerDetermination = () => {
           (content.includes('?') && contentLower.includes(firstName))
         ) {
           console.log(`[Next Speaker] Content mentions or asks "${speaker.name}", going to index ${i}`);
-          return i;
+          return validateNextSpeaker(i);
         }
       }
     }
@@ -107,7 +127,7 @@ export const useSpeakerDetermination = () => {
       // Random 50% chance to route to user
       if (Math.random() < 0.5) {
         console.log(`[Next Speaker] Content asks user a question, routing to user (index 1) [50% chance triggered]`);
-        return 1;
+        return validateNextSpeaker(1);
       } else {
         console.log(`[Next Speaker] Content asks user a question, but skipping user [50% chance not triggered]`);
         // Fall through to default routing
@@ -135,7 +155,7 @@ export const useSpeakerDetermination = () => {
       // If agents have been talking for 2-3 turns, consider routing to moderator (50% chance)
       if (consecutiveAgentTurns >= 2 && Math.random() < 0.5) {
         console.log('[Speaker Determination]   Agents had multiple turns, routing to moderator for guidance');
-        return 0; // Go to moderator
+        return validateNextSpeaker(0); // Go to moderator
       }
 
       // Otherwise, continue to next agent
@@ -150,7 +170,7 @@ export const useSpeakerDetermination = () => {
       const nextSpeaker = speakerIndices.find(s => s.index === nextIndex);
       console.log(`[Speaker Determination] ✅ Agent-to-agent routing: ${currentIndex} → ${nextIndex} (${nextSpeaker?.name})`);
       console.log('[Speaker Determination] ========================================');
-      return nextIndex;
+      return validateNextSpeaker(nextIndex);
     }
 
     // Default sequential routing for other cases
@@ -167,7 +187,7 @@ export const useSpeakerDetermination = () => {
     const nextSpeaker = speakerIndices.find(s => s.index === nextIndex);
     console.log(`[Speaker Determination] ✅ Default routing: ${currentIndex} → ${nextIndex} (${nextSpeaker?.name})`);
     console.log('[Speaker Determination] ========================================');
-    return nextIndex;
+    return validateNextSpeaker(nextIndex);
   };
 
   /**

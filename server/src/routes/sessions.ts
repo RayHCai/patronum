@@ -7,6 +7,7 @@ import { generateAgentPersonalities } from '../services/aiPatient';
 import { getHeygenService } from '../services/heygen';
 import { NUM_AI_AGENTS } from '../constants/config';
 import { completeSessionAnalysis } from '../services/sessionAnalytics';
+import { analyzeSessionSpeechGraph } from '../services/speechGraphAnalysis';
 
 const router = Router();
 
@@ -474,6 +475,87 @@ router.post('/batch-reanalyze', async (req: Request, res, next) => {
     });
   } catch (error) {
     console.error('[Batch Reanalyze] Error:', error);
+    next(error);
+  }
+});
+
+/**
+ * GET /api/sessions/:id/speech-graph
+ * Get speech graph data for a session
+ *
+ * Response:
+ * - metrics: Speech graph metrics (LSC, LCC, loops, etc.)
+ * - graph: Graph structure for visualization (nodes and links)
+ * - computed_at: When the analysis was performed
+ */
+router.get('/:id/speech-graph', async (req: Request, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const analytics = await prisma.sessionAnalytics.findFirst({
+      where: { sessionId: id },
+      select: {
+        speechGraphMetrics: true,
+        graphStructure: true,
+        graphComputedAt: true,
+      },
+    });
+
+    if (!analytics || !analytics.speechGraphMetrics) {
+      return res.status(404).json({
+        success: false,
+        message: 'Speech graph data not found. The analysis may not have been run yet.',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        metrics: analytics.speechGraphMetrics,
+        graph: analytics.graphStructure,
+        computed_at: analytics.graphComputedAt,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/sessions/:id/speech-graph/reanalyze
+ * Re-analyze speech graph for a session
+ *
+ * This triggers a new analysis using the Python microservice.
+ * Useful if the Python service was unavailable during initial analysis.
+ *
+ * Response:
+ * - success: boolean
+ * - message: Status message
+ */
+router.post('/:id/speech-graph/reanalyze', async (req: Request, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Verify session exists
+    const session = await prisma.session.findUnique({
+      where: { id },
+    });
+
+    if (!session) {
+      throw new NotFoundError('Session');
+    }
+
+    console.log(`[Speech Graph] Triggering re-analysis for session ${id}`);
+
+    // Trigger speech graph analysis
+    await analyzeSessionSpeechGraph(id);
+
+    res.json({
+      success: true,
+      message: 'Speech graph re-analysis completed successfully',
+    });
+  } catch (error) {
+    console.error('[Speech Graph] Re-analysis error:', error);
     next(error);
   }
 });

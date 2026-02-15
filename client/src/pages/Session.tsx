@@ -1,7 +1,8 @@
-// Session page - Voice-only conversation interface (MOST CRITICAL PAGE)
+// Session page - Conversational chat interface
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X } from 'lucide-react';
+import { X, Users } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useConversationStore } from '../stores/conversationStore';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useAudioPlayback } from '../hooks/useAudioPlayback';
@@ -9,8 +10,7 @@ import { useMicrophone } from '../hooks/useMicrophone';
 import { useConversationFlow } from '../hooks/useConversationFlow';
 import { usePatient } from '../contexts/PatientContext';
 import MicrophoneBar from '../components/session/MicrophoneBar';
-import VideoAvatarGrid from '../components/session/VideoAvatarGrid';
-import FloatingSubtitle from '../components/session/FloatingSubtitle';
+import ChatBubble from '../components/session/ChatBubble';
 import GameChoiceScreen from '../components/session/GameChoiceScreen';
 import CognitiveGame from '../components/session/CognitiveGame';
 import { GameAnswer } from '../types/cognitiveGame';
@@ -48,11 +48,6 @@ export default function Session() {
   const accumulatedTranscriptRef = useRef(''); // Ref to track accumulated transcript for closures
   const [isLoading, setIsLoading] = useState(true); // Start loading immediately
   const [loadingMessage, setLoadingMessage] = useState('Preparing your conversation...');
-  const [currentSubtitle, setCurrentSubtitle] = useState<{
-    speaker: string;
-    color: string;
-    text: string;
-  } | null>(null);
 
   const { transcript, interimResult, startListening, stopListening, isListening } = useMicrophone({
     onTranscript: (text) => {
@@ -85,6 +80,21 @@ export default function Session() {
       // No longer auto-processing - continuous recording
     },
   });
+
+  // Filter turns to only show moderator and user messages
+  const displayedTurns = turns.filter(turn =>
+    turn.speakerType === 'moderator' || turn.speakerType === 'participant'
+  );
+
+  // Ref for auto-scrolling chat
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [displayedTurns.length]);
 
   // Start session when component mounts
   useEffect(() => {
@@ -155,19 +165,8 @@ export default function Session() {
           console.log('[Session] 📤 Enqueueing audio for playback');
           setMicState('speaking');
 
-          // Use turn data passed directly from the callback
+          // Track current speaker for audio
           if (turnData) {
-            const color =
-              turnData.speakerType === 'moderator'
-                ? '#065f46'
-                : turnData.avatarColor || '#8B5CF6';
-
-            setCurrentSubtitle({
-              speaker: turnData.speakerName,
-              color: color,
-              text: turnData.content,
-            });
-
             if (turnData.speakerType === 'agent') {
               setCurrentSpeakerId(turnData.speakerId || null);
             } else if (turnData.speakerType === 'moderator') {
@@ -178,7 +177,6 @@ export default function Session() {
           enqueueAudio(audioUrl, id, () => {
             console.log('[Session] Audio finished');
             setCurrentSpeakerId(null);
-            setCurrentSubtitle(null);
             onComplete();
           });
         },
@@ -281,19 +279,7 @@ export default function Session() {
     }
   }, [interimResult, accumulatedTranscript, isListening]);
 
-  // Update subtitle for participant speech in real-time
-  useEffect(() => {
-    if (isListening && liveTranscript) {
-      setCurrentSubtitle({
-        speaker: 'You',
-        color: '#3B82F6',
-        text: liveTranscript,
-      });
-    } else if (!isListening) {
-      // Clear subtitle when participant stops speaking (but only if it's the participant's subtitle)
-      setCurrentSubtitle((prev) => (prev?.speaker === 'You' ? null : prev));
-    }
-  }, [isListening, liveTranscript]);
+  // Live transcript is displayed in the chat interface, no need for subtitle
 
   // Handle manually stopping recording
   const handleStopRecording = () => {
@@ -437,19 +423,8 @@ export default function Session() {
         console.log('[Session] Enqueueing audio from user turn response');
         setMicState('speaking');
 
-        // Use turn data passed directly from the callback
+        // Track current speaker for audio
         if (turnData) {
-          const color =
-            turnData.speakerType === 'moderator'
-              ? '#065f46'
-              : turnData.avatarColor || '#8B5CF6';
-
-          setCurrentSubtitle({
-            speaker: turnData.speakerName,
-            color: color,
-            text: turnData.content,
-          });
-
           if (turnData.speakerType === 'agent') {
             setCurrentSpeakerId(turnData.speakerId || null);
           } else if (turnData.speakerType === 'moderator') {
@@ -460,7 +435,6 @@ export default function Session() {
         enqueueAudio(audioUrl, id, () => {
           console.log('[Session] Audio finished');
           setCurrentSpeakerId(null);
-          setCurrentSubtitle(null);
           onComplete();
         });
       });
@@ -506,7 +480,13 @@ export default function Session() {
 
     // 3. Show game choice screen
     console.log('[Session] 🎮 Showing game choice screen');
+    console.log('[Session] Current showGameChoice state:', showGameChoice);
     setShowGameChoice(true);
+
+    // Force re-render by checking state after a tick
+    setTimeout(() => {
+      console.log('[Session] ✅ showGameChoice state after update:', useConversationStore.getState().showGameChoice);
+    }, 100);
   };
 
   // === Cognitive Game Handlers ===
@@ -647,102 +627,175 @@ export default function Session() {
     );
   }
 
+  // Debug: Log render state
+  console.log('[Session] Rendering with state:', {
+    isLoading,
+    hasTopic: !!topic,
+    showGameChoice,
+    showCognitiveGame,
+    gameType,
+    questionsCount: cognitiveGameQuestions.length
+  });
+
   if (!topic) {
+    console.warn('[Session] ⚠️ No topic found, showing redirect screen');
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <p className="text-2xl text-gray-700">No topic selected. Redirecting...</p>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex flex-col bg-[#FAFAFA] relative">
-      {/* Whiteboard dot grid background - subtle */}
-      <div
-        className="absolute inset-0 opacity-[0.15] pointer-events-none"
-        style={{
-          backgroundImage: 'radial-gradient(circle, #d1d5db 0.5px, transparent 0.5px)',
-          backgroundSize: '20px 20px',
-        }}
-      />
+    <div className="h-screen flex flex-col bg-[var(--color-bg-primary)] relative overflow-hidden">
+      {/* Soft gradient background - matching landing page */}
+      <div className="absolute inset-0 bg-gradient-to-br from-red-50/30 via-white to-red-50/20 pointer-events-none" />
 
-      {/* Header */}
-      <div className="relative z-10 bg-white/80 backdrop-blur-md border-b border-[var(--color-border)] px-8 py-6 flex items-center justify-between">
-        <div>
+      {/* Header - Glassmorphism style matching admin pages */}
+      <motion.header
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="relative z-20 flex items-center justify-between px-8 py-5 border-b border-gray-200 bg-white/80 backdrop-blur-sm"
+      >
+        <div className="flex items-center gap-4">
           <h1
             style={{ fontFamily: 'var(--font-serif)' }}
-            className="text-2xl font-semibold text-[var(--color-text-primary)]"
+            className="text-xl font-bold tracking-tight text-gray-900"
           >
             {topic.iconEmoji} {topic.title}
           </h1>
-          <p
-            style={{ fontFamily: 'var(--font-sans)' }}
-            className="text-sm text-[var(--color-text-secondary)]"
-          >
-            Turn {turns.length + 1}
-          </p>
+
+          {/* Agent count badge */}
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full">
+            <Users size={14} className="text-emerald-700" />
+            <span
+              className="text-xs font-semibold text-emerald-700"
+              style={{ fontFamily: 'var(--font-sans)' }}
+            >
+              {agents.length} {agents.length === 1 ? 'Agent' : 'Agents'}
+            </span>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleEndConversation}
-            className="flex items-center gap-2 px-6 py-3 text-[15px] font-semibold text-white bg-[var(--color-accent)] rounded-md hover:shadow-lg transition-shadow"
-            style={{ fontFamily: 'var(--font-sans)' }}
-          >
-            <X size={20} />
-            End Conversation
-          </button>
+        <button
+          onClick={handleEndConversation}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[var(--color-accent)] hover:bg-red-800 transition-colors rounded-lg"
+          style={{ fontFamily: 'var(--font-sans)' }}
+        >
+          <X size={16} strokeWidth={2.5} />
+          End Conversation
+        </button>
+      </motion.header>
+
+      {/* Main Content - Chat Messages */}
+      <div className="relative z-10 flex-1 overflow-y-auto px-8 py-6">
+        <div className="max-w-4xl mx-auto">
+          {/* Welcome message */}
+          {displayedTurns.length === 0 && !isListening && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="text-center py-12"
+            >
+              <div className="mb-4">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-100 rounded-full">
+                  <Users size={32} className="text-emerald-700" />
+                </div>
+              </div>
+              <h2
+                style={{ fontFamily: 'var(--font-serif)' }}
+                className="text-2xl font-semibold text-gray-900 mb-2"
+              >
+                Welcome to your conversation
+              </h2>
+              <p
+                style={{ fontFamily: 'var(--font-sans)' }}
+                className="text-gray-600"
+              >
+                You'll be chatting with Maya and {agents.length} AI {agents.length === 1 ? 'agent' : 'agents'}
+              </p>
+            </motion.div>
+          )}
+
+          {/* Chat messages */}
+          {displayedTurns.map((turn, index) => (
+            <ChatBubble
+              key={`${turn.sequenceNumber}-${index}`}
+              speaker={turn.speakerName}
+              message={turn.content}
+              isModerator={turn.speakerType === 'moderator'}
+              isUser={turn.speakerType === 'participant'}
+              timestamp={turn.timestamp ? new Date(turn.timestamp) : undefined}
+            />
+          ))}
+
+          {/* Live user input bubble while speaking */}
+          {isListening && liveTranscript && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex justify-end mb-4"
+            >
+              <div className="max-w-[70%] items-end flex flex-col gap-1">
+                <span
+                  className="text-xs font-medium px-2 text-blue-600"
+                  style={{ fontFamily: 'var(--font-sans)' }}
+                >
+                  You (typing...)
+                </span>
+                <div
+                  className="rounded-2xl px-5 py-3 bg-blue-500 text-white rounded-tr-sm shadow-sm"
+                  style={{ fontFamily: 'var(--font-sans)' }}
+                >
+                  <p className="text-[15px] leading-relaxed">{liveTranscript}</p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Auto-scroll anchor */}
+          <div ref={chatEndRef} />
         </div>
       </div>
 
-      {/* Main Content - Video Avatar Grid */}
-      <div className="relative z-10 flex-1 overflow-hidden">
-        <VideoAvatarGrid
-          agents={agents}
-          participantName={participant.name || 'You'}
-          currentSpeakerId={currentSpeakerId}
-          moderator={{
-            id: 'moderator',
-            name: 'Maya',
-            color: '#065f46',
-          }}
+      {/* Microphone Bar - Fixed at bottom */}
+      <div className="relative z-10">
+        <MicrophoneBar
+          micState={micState}
+          transcript={liveTranscript}
+          onStopRecording={handleStopRecording}
+          onReturnToRecording={handleReturnToRecording}
+          onConfirmTranscript={handleConfirmTranscript}
         />
       </div>
 
-      {/* Floating Subtitle */}
-      <FloatingSubtitle
-        speaker={currentSubtitle?.speaker || ''}
-        text={currentSubtitle?.text || ''}
-        color={currentSubtitle?.color || '#000'}
-        isVisible={!!currentSubtitle}
-      />
+      {/* Game Screens */}
+      <AnimatePresence mode="wait">
+        {showGameChoice && (
+          <>
+            {console.log('[Session] 🎮 Rendering GameChoiceScreen')}
+            <GameChoiceScreen
+              key="game-choice"
+              onYes={handleStartGame}
+              onNo={handleSkipGame}
+            />
+          </>
+        )}
 
-      {/* Microphone Bar */}
-      <MicrophoneBar
-        micState={micState}
-        transcript={liveTranscript}
-        onStopRecording={handleStopRecording}
-        onReturnToRecording={handleReturnToRecording}
-        onConfirmTranscript={handleConfirmTranscript}
-      />
-
-      {/* Game Choice Screen */}
-      {showGameChoice && (
-        <GameChoiceScreen
-          onYes={handleStartGame}
-          onNo={handleSkipGame}
-        />
-      )}
-
-      {/* Cognitive Game */}
-      {showCognitiveGame && cognitiveGameQuestions.length > 0 && gameType && (
-        <CognitiveGame
-          gameType={gameType}
-          questions={cognitiveGameQuestions}
-          onComplete={handleGameComplete}
-          onSkip={handleSkipGame}
-        />
-      )}
+        {showCognitiveGame && cognitiveGameQuestions.length > 0 && gameType && (
+          <>
+            {console.log('[Session] 🎯 Rendering CognitiveGame:', gameType)}
+            <CognitiveGame
+              key="cognitive-game"
+              gameType={gameType}
+              questions={cognitiveGameQuestions}
+              onComplete={handleGameComplete}
+              onSkip={handleSkipGame}
+            />
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

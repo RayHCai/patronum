@@ -4,6 +4,7 @@ import { anthropic, stripMarkdownCodeFences } from './claude';
 import { TurnData } from '../types';
 import { prisma } from '../prisma/client';
 import { NotFoundError } from '../types';
+import { analyzeSessionSpeechGraph } from './speechGraphAnalysis';
 
 // ========================================
 // Dementia-Focused Sentiment Analysis
@@ -230,13 +231,9 @@ export const generateConversationSummary = async (
 CONVERSATION:
 ${conversationText}
 
-Provide a warm, professional summary (3-4 sentences) that includes:
-1. The main topics discussed
-2. Key moments of engagement or connection
-3. Notable stories or memories shared by ${participantName}
-4. Overall tone and quality of the interaction
+Write a single paragraph summary (3-4 sentences) that captures what happened in the conversation. Include the main topics discussed, key moments of engagement or connection, notable stories or memories shared by ${participantName}, and the overall tone and quality of the interaction. Keep the summary positive and person-centered, focusing on what ${participantName} contributed and experienced.
 
-Keep the summary positive and person-centered, focusing on what ${participantName} contributed and experienced.`;
+IMPORTANT: Return ONLY plain text in paragraph form. Do NOT use markdown formatting, bullet points, numbered lists, headings, or any special formatting. Just write a natural, flowing paragraph.`;
 
   try {
     console.log(`[Session Analytics] Generating conversation summary for ${allTurns.length} turns`);
@@ -377,6 +374,8 @@ export interface SessionAnalysisResult {
     repeatedPhrases: string[];
     repeatedWords: string[];
   };
+  speechGraphStatus: 'completed' | 'failed' | 'skipped';
+  speechGraphError?: string;
 }
 
 /**
@@ -441,19 +440,41 @@ export const completeSessionAnalysis = async (
   });
 
   // 6. Create session analytics record
-  await prisma.sessionAnalytics.create({
-    data: {
-      sessionId,
-      participantId: session.participantId,
-      turnCount: analytics.totalTurns,
-      participantTurnCount: analytics.participantTurnCount,
-      avgTurnLength: analytics.avgTurnLength,
-      sentimentAnalysis: sentimentAnalysis as any,
-      computedAt: new Date(),
-    },
-  });
+  try {
+    const analyticsRecord = await prisma.sessionAnalytics.create({
+      data: {
+        sessionId,
+        participantId: session.participantId,
+        turnCount: analytics.totalTurns,
+        participantTurnCount: analytics.participantTurnCount,
+        avgTurnLength: analytics.avgTurnLength,
+        sentimentAnalysis: sentimentAnalysis as any,
+        computedAt: new Date(),
+      },
+    });
+    console.log(`[Session Analysis] Created SessionAnalytics record with ID: ${analyticsRecord.id}`);
+  } catch (error) {
+    console.error(`[Session Analysis] CRITICAL ERROR creating SessionAnalytics:`, error);
+    throw error; // Re-throw to ensure we know about this failure
+  }
 
   console.log(`[Session Analysis] Session ${sessionId} marked as complete with full analytics`);
+
+  // 7. Analyze speech graph (now part of main flow with status tracking)
+  console.log(`[Session Analysis] Starting speech graph analysis for session ${sessionId}...`);
+  let speechGraphStatus: 'completed' | 'failed' | 'skipped' = 'skipped';
+  let speechGraphError: string | undefined;
+
+  try {
+    await analyzeSessionSpeechGraph(sessionId);
+    speechGraphStatus = 'completed';
+    console.log(`[Session Analysis] Speech graph analysis completed successfully`);
+  } catch (error: any) {
+    speechGraphStatus = 'failed';
+    speechGraphError = error.message || 'Unknown error';
+    console.error(`[Session Analysis] Speech graph analysis failed:`, error.message);
+    // Don't throw - session completion should succeed even if speech graph fails
+  }
 
   return {
     summary: conversationSummary,
@@ -461,5 +482,7 @@ export const completeSessionAnalysis = async (
     analytics,
     coherenceMetrics,
     repetitionMetrics,
+    speechGraphStatus,
+    speechGraphError,
   };
 };

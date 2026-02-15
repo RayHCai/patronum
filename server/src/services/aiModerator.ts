@@ -108,7 +108,7 @@ export const generateModeratorResponse = async (
 
   const startTime = Date.now();
 
-  const recentHistory = conversationHistory.slice(-10).map((turn) => {
+  const recentHistory = conversationHistory.slice(-15).map((turn) => {
     return `${turn.speakerName}: ${turn.content}`;
   }).join('\n');
 
@@ -121,7 +121,14 @@ export const generateModeratorResponse = async (
     .map(turn => turn.content);
 
   const moderatorRepetitionWarning = moderatorPreviousContributions.length > 0
-    ? `\n\nYour previous contributions as moderator (DO NOT REPEAT these questions/themes):\n${moderatorPreviousContributions.map((c, i) => `${i + 1}. "${c}"`).join('\n')}`
+    ? `\n\n🚫 ANTI-REPETITION CHECK - Your previous contributions (YOU MUST NOT REPEAT these patterns, questions, or themes):
+${moderatorPreviousContributions.map((c, i) => `${i + 1}. "${c}"`).join('\n')}
+
+CRITICAL:
+- If you previously welcomed people or introduced the topic, DO NOT do it again
+- If you asked about "food that reminds you of home" or similar, ask something DIFFERENT
+- DO NOT use similar phrasing, themes, or question structures as above
+- The conversation has MOVED ON - reference what people have ACTUALLY said since then`
     : '';
 
   // Get agent names for potential addressing
@@ -154,10 +161,28 @@ Create a warm, personalized opening that:
 Make this opening special and tailored to this specific topic.`;
       break;
     case 'exploration':
-      phaseGuidance = `Exploring the topic. IMPORTANT: Review the recent conversation history below to see what questions have ALREADY been asked and answered. DO NOT repeat previous questions. Build on what was shared - ask new, different questions that take the conversation in a fresh direction or dig deeper into what was mentioned.`;
+      phaseGuidance = `The conversation is now UNDERWAY - the opening is DONE. DO NOT welcome people again or re-introduce the topic.
+
+CRITICAL INSTRUCTIONS:
+1. Look at what people JUST said in the recent conversation
+2. Reference SPECIFIC people by name and what they shared (e.g., "Hiroshi, you mentioned your grandmother's miso soup...")
+3. Build connections between different people's responses
+4. Ask follow-up questions that go DEEPER into what was already mentioned
+5. DO NOT ask generic questions - make them specific to what was actually discussed
+
+Your role now is to FACILITATE and CONNECT what people are sharing, not to start fresh or welcome anyone.`;
       break;
     case 'deepening':
-      phaseGuidance = `Deepening the discussion. Build on what's been shared. Help make connections between stories. IMPORTANT: Don't repeat previous questions - reference what was already discussed and explore new angles.`;
+      phaseGuidance = `The conversation is in the DEEPENING phase - you are facilitating an ongoing discussion.
+
+CRITICAL INSTRUCTIONS:
+1. Reference SPECIFIC details from what people have shared (e.g., "Ingrid mentioned her farmor's rye bread earlier...")
+2. Draw connections between different people's stories (e.g., "Both Hiroshi and Ingrid talked about morning smells...")
+3. Ask reflective questions that explore the MEANING or FEELINGS behind what was shared
+4. DO NOT welcome anyone, re-introduce topics, or ask generic starter questions
+5. You are GUIDING a conversation in progress - build on the existing threads
+
+Your job is to help people explore what's been shared more deeply, not to change subjects.`;
       break;
     case 'synthesis':
       phaseGuidance = `Bringing threads together. Reflect on themes or connections that emerged in the conversation.`;
@@ -235,7 +260,14 @@ ${recentHistory || '(Conversation just starting)'}${moderatorRepetitionWarning}$
 
 Participant engagement level: ${lastParticipantEngagement}
 
-What should you say next as the moderator? Keep it brief, warm, and natural. Follow any behavioral guidance above. Bring fresh questions/prompts - don't repeat what you've already asked. Only provide the dialogue - no actions or expressions.`;
+What should you say next as the moderator?
+
+REQUIREMENTS:
+- Reference SPECIFIC people and what they JUST said (use their names and details)
+- Build on the ACTUAL conversation that just happened
+- Keep it brief (1-2 sentences), warm, and natural
+- If this is not the opening, DO NOT welcome people or introduce topics
+- Only provide the dialogue - no actions or expressions`;
 
   console.log(`[AI Moderator] Calling Claude API for moderator response (phase: ${currentPhase})...`);
   const message = await anthropic.messages.create({

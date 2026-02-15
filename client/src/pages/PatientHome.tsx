@@ -56,24 +56,6 @@ export default function PatientHome() {
             Start a Conversation
           </PatientButton>
         </motion.div>
-
-        {/* Help Text */}
-        <motion.div
-          className="mt-16"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.8 }}
-        >
-          <p
-            className="text-sm text-[var(--color-text-secondary)]"
-            style={{ fontFamily: 'var(--font-sans)' }}
-          >
-            Need help?{' '}
-            <span className="font-medium text-[var(--color-text-primary)] cursor-pointer hover:underline">
-              Contact your care team
-            </span>
-          </p>
-        </motion.div>
       </motion.div>
     </div>
   );

@@ -1,7 +1,8 @@
 // Redesigned patient profile page with conversation analytics
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Settings, RefreshCw, BarChart3 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { ArrowLeft, Settings, RefreshCw, BarChart3, Network } from 'lucide-react';
 import ReactFlow, {
   Background,
   Node,
@@ -15,6 +16,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { Participant, Session, Turn } from '../../types';
 import axios from 'axios';
+import { SpeechGraphVisualization, SpeechGraphMetrics } from '../../components/SpeechGraph';
 
 // Custom circular node component with proper handles
 function CircularNode({ data }: NodeProps) {
@@ -45,16 +47,6 @@ interface SessionWithDetails extends Session {
   agents?: any[];
 }
 
-interface WeeklyMetrics {
-  totalConversations: number;
-  avgDuration: number; // in minutes
-  sentimentBreakdown: {
-    positive: number;
-    neutral: number;
-    monitor: number;
-  };
-}
-
 export default function PatientProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -67,11 +59,11 @@ export default function PatientProfile() {
   const [isReanalyzing, setIsReanalyzing] = useState(false);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
-  const [weeklyMetrics, setWeeklyMetrics] = useState<WeeklyMetrics>({
-    totalConversations: 0,
-    avgDuration: 0,
-    sentimentBreakdown: { positive: 0, neutral: 0, monitor: 0 }
-  });
+  const [speechGraphData, setSpeechGraphData] = useState<any>(null);
+  const [loadingGraph, setLoadingGraph] = useState(false);
+  const [graphError, setGraphError] = useState<string | null>(null);
+  const [sessionAnalytics, setSessionAnalytics] = useState<any>(null);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
   console.log('PatientProfile component rendered. ID:', id, 'isLoading:', isLoading);
 
@@ -106,10 +98,13 @@ export default function PatientProfile() {
           if (sessionDetail.turns && sessionDetail.turns.length > 0) {
             generateConversationFlow(sessionDetail.turns);
           }
-        }
 
-        // Calculate weekly metrics
-        calculateWeeklyMetrics(sessionsData);
+          // Fetch analytics and speech graph data for completed sessions
+          if (sessionDetail.status === 'completed') {
+            fetchSessionAnalytics(sessionDetail.id);
+            fetchSpeechGraphData(sessionDetail.id);
+          }
+        }
 
         // Ensure minimum loading time of 800ms for better UX
         const elapsedTime = Date.now() - startTime;
@@ -214,59 +209,6 @@ export default function PatientProfile() {
     setEdges(flowEdges);
   };
 
-  const calculateWeeklyMetrics = async (sessionsData: SessionWithDetails[]) => {
-    const now = new Date();
-    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-    const weekSessions = sessionsData.filter(s =>
-      new Date(s.startedAt) >= weekAgo
-    );
-
-    const totalConversations = weekSessions.length;
-
-    const totalDuration = weekSessions.reduce((sum, session) => {
-      if (session.endedAt) {
-        const duration = (new Date(session.endedAt).getTime() - new Date(session.startedAt).getTime()) / (1000 * 60);
-        return sum + duration;
-      }
-      return sum;
-    }, 0);
-
-    const avgDuration = totalConversations > 0 ? totalDuration / totalConversations : 0;
-
-    // Calculate sentiment breakdown from session analytics
-    let positiveCnt = 0;
-    let neutralCnt = 0;
-    let negativeCnt = 0;
-
-    for (const session of weekSessions) {
-      const analytics = session.sessionAnalytics?.[0];
-      if (analytics?.sentimentAnalysis) {
-        const sentiment = (analytics.sentimentAnalysis as any)?.overallSentiment;
-        if (sentiment === 'positive') positiveCnt++;
-        else if (sentiment === 'neutral') neutralCnt++;
-        else if (sentiment === 'negative' || sentiment === 'mixed') negativeCnt++;
-      }
-    }
-
-    const total = positiveCnt + neutralCnt + negativeCnt;
-    const sentimentBreakdown = total > 0 ? {
-      positive: Math.round((positiveCnt / total) * 100),
-      neutral: Math.round((neutralCnt / total) * 100),
-      monitor: Math.round((negativeCnt / total) * 100)
-    } : {
-      positive: 0,
-      neutral: 0,
-      monitor: 0
-    };
-
-    setWeeklyMetrics({
-      totalConversations,
-      avgDuration,
-      sentimentBreakdown
-    });
-  };
-
   const handleSessionSelect = async (session: SessionWithDetails) => {
     setIsLoadingSession(true);
     setSelectedSession(session);
@@ -290,6 +232,15 @@ export default function PatientProfile() {
       generateConversationFlow(session.turns);
       setIsLoadingSession(false);
     }
+
+    // Fetch analytics and speech graph data for completed sessions
+    if (session.status === 'completed') {
+      fetchSessionAnalytics(session.id);
+      fetchSpeechGraphData(session.id);
+    } else {
+      setSessionAnalytics(null);
+      setSpeechGraphData(null);
+    }
   };
 
   const handleRefreshSessions = async () => {
@@ -300,9 +251,6 @@ export default function PatientProfile() {
       const sessionsRes = await axios.get(`/api/participants/${id}/sessions`);
       const sessionsData = sessionsRes.data.data || [];
       setSessions(sessionsData);
-
-      // Recalculate weekly metrics with new data
-      calculateWeeklyMetrics(sessionsData);
 
       // If there's a selected session, refresh its details too
       if (selectedSession) {
@@ -321,6 +269,52 @@ export default function PatientProfile() {
     }
   };
 
+  const fetchSpeechGraphData = async (sessionId: string) => {
+    try {
+      setLoadingGraph(true);
+      setGraphError(null);
+      console.log(`[UI] Fetching speech graph data for session ${sessionId}...`);
+
+      const response = await axios.get(`/api/sessions/${sessionId}/speech-graph`);
+      setSpeechGraphData(response.data.data);
+      console.log('[UI] Speech graph data loaded:', response.data.data);
+    } catch (error: any) {
+      console.error('[UI] Error fetching speech graph:', error);
+      if (error.response?.status === 404) {
+        setGraphError('Speech graph analysis not available yet. Try re-analyzing the session.');
+      } else {
+        setGraphError('Failed to load speech graph data.');
+      }
+      setSpeechGraphData(null);
+    } finally {
+      setLoadingGraph(false);
+    }
+  };
+
+  const fetchSessionAnalytics = async (sessionId: string) => {
+    try {
+      setLoadingAnalytics(true);
+      console.log(`[UI] Fetching session analytics for session ${sessionId}...`);
+
+      // Get session with analytics
+      const response = await axios.get(`/api/sessions/${sessionId}`);
+      const session = response.data.data;
+
+      if (session.sessionAnalytics && session.sessionAnalytics.length > 0) {
+        setSessionAnalytics(session.sessionAnalytics[0]);
+        console.log('[UI] Session analytics loaded:', session.sessionAnalytics[0]);
+      } else {
+        setSessionAnalytics(null);
+        console.log('[UI] No analytics available for this session');
+      }
+    } catch (error: any) {
+      console.error('[UI] Error fetching session analytics:', error);
+      setSessionAnalytics(null);
+    } finally {
+      setLoadingAnalytics(false);
+    }
+  };
+
   const handleReanalyzeSession = async (sessionId: string) => {
     try {
       setIsReanalyzing(true);
@@ -329,6 +323,8 @@ export default function PatientProfile() {
       // Call the reanalyze endpoint
       const response = await axios.post(`/api/sessions/${sessionId}/reanalyze`);
       console.log(`[UI] Re-analysis completed:`, response.data);
+
+      const result = response.data.data;
 
       // Refresh the session details
       const sessionDetailRes = await axios.get(`/api/sessions/${sessionId}`);
@@ -340,13 +336,41 @@ export default function PatientProfile() {
       const sessionsData = sessionsRes.data.data || [];
       setSessions(sessionsData);
 
-      // Recalculate metrics
-      calculateWeeklyMetrics(sessionsData);
+      // Refresh speech graph data
+      fetchSpeechGraphData(sessionId);
 
-      alert('Session analytics updated successfully!');
+      // Show appropriate message based on speech graph status
+      if (result.speechGraphStatus === 'completed') {
+        toast.success('Session analytics and speech graph analysis updated successfully!', {
+          duration: 5000,
+        });
+      } else if (result.speechGraphStatus === 'failed') {
+        toast.error(
+          `Speech graph analysis failed: ${result.speechGraphError || 'Unknown error'}. Make sure the Python service is running.`,
+          {
+            duration: 6000,
+          }
+        );
+        toast.success('Session analytics updated successfully!', {
+          duration: 4000,
+        });
+      } else {
+        toast.success('Session analytics updated successfully!', {
+          duration: 4000,
+        });
+        toast('Speech graph analysis was skipped (not enough participant data).', {
+          icon: 'ℹ️',
+          duration: 5000,
+        });
+      }
     } catch (error: any) {
       console.error('Error re-analyzing session:', error);
-      alert(`Failed to re-analyze session: ${error.response?.data?.message || error.message}`);
+      toast.error(
+        `Failed to re-analyze session: ${error.response?.data?.message || error.message}`,
+        {
+          duration: 5000,
+        }
+      );
     } finally {
       setIsReanalyzing(false);
     }
@@ -447,79 +471,79 @@ export default function PatientProfile() {
       {/* Main Layout */}
       <div className="relative z-10 flex h-[calc(100vh-73px)]">
         {/* Left Sidebar - Recent Conversations */}
-        <div className="w-80 bg-white border-r border-gray-200 overflow-y-auto">
-          <div className="px-6 py-6 border-b border-gray-200">
+        <div className="w-80 bg-gradient-to-b from-red-50/20 via-white/50 to-white/80 backdrop-blur-xl border-r border-gray-200/50 overflow-y-auto">
+          <div className="px-6 py-7 border-b border-gray-200/50">
             <div className="flex items-center justify-between">
               <div>
                 <h2
-                  className="text-sm font-bold text-gray-900 uppercase tracking-wide"
-                  style={{ fontFamily: 'var(--font-sans)' }}
+                  className="text-base font-semibold text-gray-900 tracking-tight mb-1"
+                  style={{ fontFamily: 'var(--font-serif)' }}
                 >
                   Recent Conversations
                 </h2>
-                <p className="text-xs text-gray-500 mt-1" style={{ fontFamily: 'var(--font-sans)' }}>
+                <p className="text-xs text-gray-500" style={{ fontFamily: 'var(--font-sans)' }}>
                   Last 7 days
                 </p>
               </div>
               <button
                 onClick={handleRefreshSessions}
                 disabled={isRefreshing}
-                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 text-gray-400 hover:text-gray-700 hover:bg-white/60 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Refresh conversations"
               >
                 <RefreshCw
-                  size={14}
+                  size={15}
                   className={isRefreshing ? 'animate-spin' : ''}
                 />
               </button>
             </div>
           </div>
 
-          <div className="p-4 space-y-3">
+          <div className="p-5 space-y-3">
             {sessions.map((session) => {
               const isSelected = selectedSession?.id === session.id;
-              const statusColor = session.status === 'completed' ? 'bg-green-500' :
+              const statusColor = session.status === 'completed' ? 'bg-emerald-500' :
                                 session.status === 'active' ? 'bg-blue-500' : 'bg-gray-400';
 
               return (
                 <button
                   key={session.id}
                   onClick={() => handleSessionSelect(session)}
-                  className={`w-full text-left p-4 border transition-all ${
+                  className={`w-full text-left p-5 rounded-xl border transition-all duration-300 ${
                     isSelected
-                      ? 'border-gray-900 bg-gray-50'
-                      : 'border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50'
+                      ? 'border-gray-300 bg-white/90 backdrop-blur-sm shadow-md'
+                      : 'border-gray-200/60 bg-white/60 backdrop-blur-sm hover:border-gray-300 hover:bg-white/80 hover:shadow-sm'
                   }`}
                 >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${statusColor}`} />
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-2 h-2 rounded-full ${statusColor} shadow-sm`} />
                       <span
-                        className="text-xs text-gray-500"
+                        className="text-xs text-gray-500 font-medium"
                         style={{ fontFamily: 'var(--font-sans)' }}
                       >
-                        {new Date(session.startedAt).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}
+                        {new Date(session.startedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </span>
                     </div>
                   </div>
 
-                  <div className="space-y-1 mb-2">
+                  <div className="space-y-2 mb-3">
                     <p
                       className="text-sm font-semibold text-gray-900 line-clamp-1"
-                      style={{ fontFamily: 'var(--font-sans)' }}
+                      style={{ fontFamily: 'var(--font-serif)' }}
                     >
                       {getSessionParticipants(session)}
                     </p>
                     <p
-                      className="text-xs text-gray-600 line-clamp-2"
+                      className="text-xs text-gray-600 leading-relaxed line-clamp-2"
                       style={{ fontFamily: 'var(--font-sans)' }}
                     >
                       {session.aiSummary || session.topic || 'Conversation session'}
                     </p>
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-gray-500" style={{ fontFamily: 'var(--font-sans)' }}>
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <span className="text-xs text-gray-500 font-medium" style={{ fontFamily: 'var(--font-sans)' }}>
                       {getSessionDuration(session)}
                     </span>
                   </div>
@@ -547,12 +571,6 @@ export default function PatientProfile() {
                     >
                       {formatDate(selectedSession.startedAt)}
                     </h2>
-                    <p
-                      className="text-sm text-gray-600 mt-1"
-                      style={{ fontFamily: 'var(--font-sans)' }}
-                    >
-                      {patient.agents?.[0]?.name || 'Care Agent'}
-                    </p>
                   </div>
                   {selectedSession.status === 'completed' && (
                     <button
@@ -562,7 +580,7 @@ export default function PatientProfile() {
                       style={{ fontFamily: 'var(--font-sans)' }}
                       title="Re-run analytics for this session"
                     >
-                      <BarChart3 size={14} className={isReanalyzing ? 'animate-spin' : ''} />
+                      <BarChart3 size={14} />
                       {isReanalyzing ? 'Re-analyzing...' : 'Re-analyze'}
                     </button>
                   )}
@@ -626,6 +644,76 @@ export default function PatientProfile() {
                         <span className="text-gray-600">AI patient agent</span>
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {/* Speech Graph Analysis */}
+                {selectedSession?.status === 'completed' && (
+                  <div className="mb-8 pt-8 border-t border-gray-200">
+                    <h3
+                      className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-3"
+                      style={{ fontFamily: 'var(--font-sans)' }}
+                    >
+                      Speech Graph Analysis
+                    </h3>
+
+                    {loadingGraph && (
+                      <div className="flex items-center justify-center h-64 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="text-center">
+                          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-[#620000] border-r-transparent mb-2"></div>
+                          <p className="text-sm text-gray-600">Loading speech graph analysis...</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {graphError && !loadingGraph && (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <p className="text-sm text-yellow-800">{graphError}</p>
+                        <p className="text-xs text-gray-600 mt-2">
+                          Use the "Re-analyze" button above to generate speech graph data.
+                        </p>
+                      </div>
+                    )}
+
+                    {speechGraphData && !loadingGraph && (
+                      <>
+                        <SpeechGraphMetrics metrics={speechGraphData.metrics} />
+
+                        <div className="mt-6">
+                          <h4
+                            className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-3"
+                            style={{ fontFamily: 'var(--font-sans)' }}
+                          >
+                            Speech Network Visualization
+                          </h4>
+                          <div className="border border-gray-200 bg-white" style={{ height: '400px', overflow: 'hidden' }}>
+                            <SpeechGraphVisualization
+                              nodes={speechGraphData.graph.nodes}
+                              links={speechGraphData.graph.links}
+                              height={400}
+                              animate={false}
+                            />
+                          </div>
+                          <div className="mt-3 space-y-2">
+                            <div className="flex items-center gap-3 text-xs" style={{ fontFamily: 'var(--font-sans)' }}>
+                              <span className="text-gray-600 font-medium">Node color:</span>
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#d73027' }} />
+                                <span className="text-gray-500">Low connections</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#fee08b' }} />
+                                <span className="text-gray-500">Medium</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#1a9850' }} />
+                                <span className="text-gray-500">High connections</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -700,143 +788,374 @@ export default function PatientProfile() {
           </div>
         </div>
 
-        {/* Right Sidebar - Weekly Overview */}
-        <div className="w-80 bg-white border-l border-gray-200 overflow-y-auto">
-          <div className="px-6 py-6 border-b border-gray-200">
-            <h2
-              className="text-sm font-bold text-gray-900 uppercase tracking-wide"
-              style={{ fontFamily: 'var(--font-sans)' }}
-            >
-              Weekly Overview
-            </h2>
-          </div>
-
-          <div className="p-6 space-y-6">
-            {/* Total Conversations */}
-            <div>
-              <p
-                className="text-xs text-gray-500 uppercase tracking-wide mb-2"
-                style={{ fontFamily: 'var(--font-sans)' }}
+        {/* Right Sidebar - Session Analytics */}
+        <div className="w-80 bg-white border-l border-[var(--color-border)] overflow-y-auto">
+          <div>
+            <div className="px-6 py-7 border-b border-[var(--color-border)]">
+              <h2
+                className="text-lg font-semibold text-[var(--color-text-primary)] tracking-tight"
+                style={{ fontFamily: 'var(--font-serif)' }}
               >
-                Total Conversations
-              </p>
-              <p
-                className="text-4xl font-bold text-[var(--color-accent)]"
-                style={{ fontFamily: 'var(--font-sans)' }}
-              >
-                {weeklyMetrics.totalConversations}
-              </p>
-              <p
-                className="text-xs text-gray-500 mt-1"
-                style={{ fontFamily: 'var(--font-sans)' }}
-              >
-                This week
+                Session Analytics
+              </h2>
+              <p className="text-xs text-[var(--color-text-muted)] mt-1" style={{ fontFamily: 'var(--font-sans)' }}>
+                Real-time insights
               </p>
             </div>
 
-            {/* Avg Duration */}
-            <div>
-              <p
-                className="text-xs text-gray-500 uppercase tracking-wide mb-2"
-                style={{ fontFamily: 'var(--font-sans)' }}
-              >
-                Avg Duration
-              </p>
-              <p
-                className="text-3xl font-bold text-gray-900"
-                style={{ fontFamily: 'var(--font-sans)' }}
-              >
-                {weeklyMetrics.avgDuration.toFixed(1)}
-              </p>
-              <p
-                className="text-xs text-gray-500 mt-1"
-                style={{ fontFamily: 'var(--font-sans)' }}
-              >
-                minutes
-              </p>
-            </div>
-
-            {/* Sentiment Breakdown */}
-            <div>
-              <p
-                className="text-xs text-gray-500 uppercase tracking-wide mb-3"
-                style={{ fontFamily: 'var(--font-sans)' }}
-              >
-                Sentiment Breakdown
-              </p>
-              <div className="space-y-3">
-                {/* Positive */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span
-                      className="text-sm font-medium text-gray-900"
-                      style={{ fontFamily: 'var(--font-sans)' }}
-                    >
-                      Positive
-                    </span>
-                    <span
-                      className="text-sm font-bold text-gray-900"
-                      style={{ fontFamily: 'var(--font-sans)' }}
-                    >
-                      {weeklyMetrics.sentimentBreakdown.positive}%
-                    </span>
-                  </div>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-green-500"
-                      style={{ width: `${weeklyMetrics.sentimentBreakdown.positive}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Neutral */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span
-                      className="text-sm font-medium text-gray-900"
-                      style={{ fontFamily: 'var(--font-sans)' }}
-                    >
-                      Neutral
-                    </span>
-                    <span
-                      className="text-sm font-bold text-gray-900"
-                      style={{ fontFamily: 'var(--font-sans)' }}
-                    >
-                      {weeklyMetrics.sentimentBreakdown.neutral}%
-                    </span>
-                  </div>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gray-400"
-                      style={{ width: `${weeklyMetrics.sentimentBreakdown.neutral}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Monitor */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span
-                      className="text-sm font-medium text-gray-900"
-                      style={{ fontFamily: 'var(--font-sans)' }}
-                    >
-                      Monitor
-                    </span>
-                    <span
-                      className="text-sm font-bold text-gray-900"
-                      style={{ fontFamily: 'var(--font-sans)' }}
-                    >
-                      {weeklyMetrics.sentimentBreakdown.monitor}%
-                    </span>
-                  </div>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-yellow-500"
-                      style={{ width: `${weeklyMetrics.sentimentBreakdown.monitor}%` }}
-                    />
-                  </div>
-                </div>
+            <div className="p-6 space-y-8">
+            {loadingAnalytics ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-[var(--color-accent)] border-r-transparent"></div>
+                <p className="text-xs text-[var(--color-text-muted)] mt-4" style={{ fontFamily: 'var(--font-sans)' }}>
+                  Loading analytics...
+                </p>
               </div>
+            ) : !selectedSession ? (
+              <div className="text-center py-16 px-4">
+                <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center">
+                  <BarChart3 size={20} className="text-[var(--color-accent)]" />
+                </div>
+                <p className="text-sm text-[var(--color-text-secondary)]" style={{ fontFamily: 'var(--font-sans)' }}>
+                  Select a conversation to view analytics
+                </p>
+              </div>
+            ) : selectedSession.status !== 'completed' ? (
+              <div className="text-center py-16 px-4">
+                <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
+                  <BarChart3 size={20} className="text-gray-400" />
+                </div>
+                <p className="text-sm text-[var(--color-text-secondary)]" style={{ fontFamily: 'var(--font-sans)' }}>
+                  Analytics available after
+                </p>
+                <p className="text-sm text-[var(--color-text-secondary)]" style={{ fontFamily: 'var(--font-sans)' }}>
+                  session completion
+                </p>
+              </div>
+            ) : !sessionAnalytics ? (
+              <div className="text-center py-16 px-4">
+                <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-yellow-50 flex items-center justify-center">
+                  <RefreshCw size={20} className="text-yellow-600" />
+                </div>
+                <p className="text-sm text-[var(--color-text-secondary)] mb-3" style={{ fontFamily: 'var(--font-sans)' }}>
+                  No analytics available
+                </p>
+                <button
+                  onClick={() => selectedSession && handleReanalyzeSession(selectedSession.id)}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-[var(--color-accent)] bg-[var(--color-accent-light)] hover:bg-red-100 rounded-lg transition-all duration-200"
+                  style={{ fontFamily: 'var(--font-sans)' }}
+                >
+                  <RefreshCw size={12} />
+                  Generate analytics
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Overall Sentiment */}
+                {sessionAnalytics.sentimentAnalysis && (
+                  <div className="bg-white rounded-lg p-4 border border-[var(--color-border)]">
+                    <p
+                      className="text-xs text-[var(--color-text-muted)] uppercase tracking-wider mb-2"
+                      style={{ fontFamily: 'var(--font-sans)' }}
+                    >
+                      Overall Sentiment
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{
+                          backgroundColor:
+                            sessionAnalytics.sentimentAnalysis.overallSentiment === 'positive'
+                              ? '#10B981'
+                              : sessionAnalytics.sentimentAnalysis.overallSentiment === 'negative'
+                              ? '#EF4444'
+                              : sessionAnalytics.sentimentAnalysis.overallSentiment === 'mixed'
+                              ? '#F59E0B'
+                              : '#6B7280',
+                        }}
+                      />
+                      <p
+                        className="text-lg font-semibold capitalize"
+                        style={{
+                          fontFamily: 'var(--font-serif)',
+                          color:
+                            sessionAnalytics.sentimentAnalysis.overallSentiment === 'positive'
+                              ? '#10B981'
+                              : sessionAnalytics.sentimentAnalysis.overallSentiment === 'negative'
+                              ? '#EF4444'
+                              : sessionAnalytics.sentimentAnalysis.overallSentiment === 'mixed'
+                              ? '#F59E0B'
+                              : '#6B7280',
+                        }}
+                      >
+                        {sessionAnalytics.sentimentAnalysis.overallSentiment}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Emotional Tone - Animated Bars */}
+                {sessionAnalytics.sentimentAnalysis?.emotionalTone && (
+                  <div>
+                    <p
+                      className="text-xs text-[var(--color-text-muted)] uppercase tracking-wider mb-4"
+                      style={{ fontFamily: 'var(--font-sans)' }}
+                    >
+                      Emotional Tone
+                    </p>
+                    <div className="space-y-4">
+                      {/* Happiness */}
+                      <div className="group">
+                        <div className="flex items-center justify-between mb-2">
+                          <span
+                            className="text-xs font-medium text-[var(--color-text-secondary)] group-hover:text-[var(--color-text-primary)] transition-colors"
+                            style={{ fontFamily: 'var(--font-sans)' }}
+                          >
+                            Happiness
+                          </span>
+                          <span
+                            className="text-sm font-semibold text-[var(--color-text-primary)] tabular-nums"
+                            style={{ fontFamily: 'var(--font-sans)' }}
+                          >
+                            {Math.round(sessionAnalytics.sentimentAnalysis.emotionalTone.happiness * 100)}%
+                          </span>
+                        </div>
+                        <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-green-500 rounded-full transition-all duration-700 ease-out"
+                            style={{
+                              width: `${sessionAnalytics.sentimentAnalysis.emotionalTone.happiness * 100}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Engagement */}
+                      <div className="group">
+                        <div className="flex items-center justify-between mb-2">
+                          <span
+                            className="text-xs font-medium text-[var(--color-text-secondary)] group-hover:text-[var(--color-text-primary)] transition-colors"
+                            style={{ fontFamily: 'var(--font-sans)' }}
+                          >
+                            Engagement
+                          </span>
+                          <span
+                            className="text-sm font-semibold text-[var(--color-text-primary)] tabular-nums"
+                            style={{ fontFamily: 'var(--font-sans)' }}
+                          >
+                            {Math.round(sessionAnalytics.sentimentAnalysis.emotionalTone.engagement * 100)}%
+                          </span>
+                        </div>
+                        <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-blue-500 rounded-full transition-all duration-700 ease-out"
+                            style={{
+                              width: `${sessionAnalytics.sentimentAnalysis.emotionalTone.engagement * 100}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Anxiety */}
+                      <div className="group">
+                        <div className="flex items-center justify-between mb-2">
+                          <span
+                            className="text-xs font-medium text-[var(--color-text-secondary)] group-hover:text-[var(--color-text-primary)] transition-colors"
+                            style={{ fontFamily: 'var(--font-sans)' }}
+                          >
+                            Anxiety
+                          </span>
+                          <span
+                            className="text-sm font-semibold text-[var(--color-text-primary)] tabular-nums"
+                            style={{ fontFamily: 'var(--font-sans)' }}
+                          >
+                            {Math.round(sessionAnalytics.sentimentAnalysis.emotionalTone.anxiety * 100)}%
+                          </span>
+                        </div>
+                        <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-yellow-500 rounded-full transition-all duration-700 ease-out"
+                            style={{
+                              width: `${sessionAnalytics.sentimentAnalysis.emotionalTone.anxiety * 100}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Frustration */}
+                      <div className="group">
+                        <div className="flex items-center justify-between mb-2">
+                          <span
+                            className="text-xs font-medium text-[var(--color-text-secondary)] group-hover:text-[var(--color-text-primary)] transition-colors"
+                            style={{ fontFamily: 'var(--font-sans)' }}
+                          >
+                            Frustration
+                          </span>
+                          <span
+                            className="text-sm font-semibold text-[var(--color-text-primary)] tabular-nums"
+                            style={{ fontFamily: 'var(--font-sans)' }}
+                          >
+                            {Math.round(sessionAnalytics.sentimentAnalysis.emotionalTone.frustration * 100)}%
+                          </span>
+                        </div>
+                        <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-orange-500 rounded-full transition-all duration-700 ease-out"
+                            style={{
+                              width: `${sessionAnalytics.sentimentAnalysis.emotionalTone.frustration * 100}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Confusion */}
+                      <div className="group">
+                        <div className="flex items-center justify-between mb-2">
+                          <span
+                            className="text-xs font-medium text-[var(--color-text-secondary)] group-hover:text-[var(--color-text-primary)] transition-colors"
+                            style={{ fontFamily: 'var(--font-sans)' }}
+                          >
+                            Confusion
+                          </span>
+                          <span
+                            className="text-sm font-semibold text-[var(--color-text-primary)] tabular-nums"
+                            style={{ fontFamily: 'var(--font-sans)' }}
+                          >
+                            {Math.round(sessionAnalytics.sentimentAnalysis.emotionalTone.confusion * 100)}%
+                          </span>
+                        </div>
+                        <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-red-500 rounded-full transition-all duration-700 ease-out"
+                            style={{
+                              width: `${sessionAnalytics.sentimentAnalysis.emotionalTone.confusion * 100}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Cognitive Indicators */}
+                {sessionAnalytics.sentimentAnalysis?.cognitiveIndicators && (
+                  <div className="border-t border-[var(--color-border)] pt-8">
+                    <p
+                      className="text-xs text-[var(--color-text-muted)] uppercase tracking-wider mb-4"
+                      style={{ fontFamily: 'var(--font-sans)' }}
+                    >
+                      Cognitive Indicators
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="bg-white rounded-lg p-2.5 border border-[var(--color-border)] hover:shadow-md transition-shadow">
+                        <p className="text-xs text-[var(--color-text-muted)] mb-1" style={{ fontFamily: 'var(--font-sans)' }}>
+                          Clarity
+                        </p>
+                        <p className="text-sm font-semibold text-[var(--color-text-primary)] tabular-nums" style={{ fontFamily: 'var(--font-sans)' }}>
+                          {Math.round(sessionAnalytics.sentimentAnalysis.cognitiveIndicators.clarity * 100)}%
+                        </p>
+                      </div>
+                      <div className="bg-white rounded-lg p-2.5 border border-[var(--color-border)] hover:shadow-md transition-shadow">
+                        <p className="text-xs text-[var(--color-text-muted)] mb-1" style={{ fontFamily: 'var(--font-sans)' }}>
+                          Coherence
+                        </p>
+                        <p className="text-sm font-semibold text-[var(--color-text-primary)] tabular-nums" style={{ fontFamily: 'var(--font-sans)' }}>
+                          {Math.round(sessionAnalytics.sentimentAnalysis.cognitiveIndicators.coherence * 100)}%
+                        </p>
+                      </div>
+                      <div className="bg-white rounded-lg p-2.5 border border-[var(--color-border)] hover:shadow-md transition-shadow">
+                        <p className="text-xs text-[var(--color-text-muted)] mb-1" style={{ fontFamily: 'var(--font-sans)' }}>
+                          Memory
+                        </p>
+                        <p className="text-sm font-semibold capitalize text-[var(--color-text-primary)]" style={{ fontFamily: 'var(--font-sans)' }}>
+                          {sessionAnalytics.sentimentAnalysis.cognitiveIndicators.memoryRecall}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Communication Patterns */}
+                {sessionAnalytics.sentimentAnalysis?.communicationPatterns && (
+                  <div>
+                    <p
+                      className="text-xs text-[var(--color-text-muted)] uppercase tracking-wider mb-4"
+                      style={{ fontFamily: 'var(--font-sans)' }}
+                    >
+                      Communication
+                    </p>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+                        <span className="text-xs text-[var(--color-text-secondary)]" style={{ fontFamily: 'var(--font-sans)' }}>
+                          Avg Response Length
+                        </span>
+                        <span className="text-sm font-semibold text-[var(--color-text-primary)] tabular-nums" style={{ fontFamily: 'var(--font-sans)' }}>
+                          {sessionAnalytics.sentimentAnalysis.communicationPatterns.avgResponseLength} <span className="text-xs text-[var(--color-text-muted)] font-normal">words</span>
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+                        <span className="text-xs text-[var(--color-text-secondary)]" style={{ fontFamily: 'var(--font-sans)' }}>
+                          Questions Asked
+                        </span>
+                        <span className="text-sm font-semibold text-[var(--color-text-primary)] tabular-nums" style={{ fontFamily: 'var(--font-sans)' }}>
+                          {sessionAnalytics.sentimentAnalysis.communicationPatterns.questionAsking}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Positive Indicators */}
+                {sessionAnalytics.sentimentAnalysis?.positiveIndicators &&
+                  sessionAnalytics.sentimentAnalysis.positiveIndicators.length > 0 && (
+                    <div className="border-t border-[var(--color-border)] pt-8">
+                      <p
+                        className="text-xs text-[var(--color-text-muted)] uppercase tracking-wider mb-3"
+                        style={{ fontFamily: 'var(--font-sans)' }}
+                      >
+                        Positive Signs
+                      </p>
+                      <ul className="space-y-2">
+                        {sessionAnalytics.sentimentAnalysis.positiveIndicators.map((indicator: string, idx: number) => (
+                          <li
+                            key={idx}
+                            className="text-xs text-green-700 bg-green-50 px-3 py-2 rounded-lg flex items-start gap-2 hover:bg-green-100 transition-colors"
+                            style={{ fontFamily: 'var(--font-sans)' }}
+                          >
+                            <span className="text-green-600 font-bold flex-shrink-0">✓</span>
+                            <span className="leading-relaxed">{indicator}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                {/* Concern Flags */}
+                {sessionAnalytics.sentimentAnalysis?.concernFlags &&
+                  sessionAnalytics.sentimentAnalysis.concernFlags.length > 0 && (
+                    <div className="border-t border-[var(--color-border)] pt-8">
+                      <p
+                        className="text-xs text-[var(--color-text-muted)] uppercase tracking-wider mb-3"
+                        style={{ fontFamily: 'var(--font-sans)' }}
+                      >
+                        Concerns
+                      </p>
+                      <ul className="space-y-2">
+                        {sessionAnalytics.sentimentAnalysis.concernFlags.map((flag: string, idx: number) => (
+                          <li
+                            key={idx}
+                            className="text-xs text-amber-700 bg-amber-50 px-3 py-2 rounded-lg flex items-start gap-2 hover:bg-amber-100 transition-colors"
+                            style={{ fontFamily: 'var(--font-sans)' }}
+                          >
+                            <span className="text-amber-600 font-bold flex-shrink-0">⚠</span>
+                            <span className="leading-relaxed">{flag}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+              </>
+            )}
             </div>
           </div>
         </div>
