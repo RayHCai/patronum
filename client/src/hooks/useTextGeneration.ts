@@ -26,7 +26,6 @@ export const useTextGeneration = () => {
     getCachedText,
     cacheText,
     clearTextCache,
-    userReturnCounter,
   } = useConversationStore();
 
   /**
@@ -65,8 +64,8 @@ export const useTextGeneration = () => {
       setError(null);
 
       try {
-        // Get last 10 turns for context
-        const conversationHistory = turns.slice(-10);
+        // Get last 50 turns for context (increased from 10 to provide better history)
+        const conversationHistory = turns.slice(-50);
         console.log('[Text Generation] Conversation context: Last', conversationHistory.length, 'turns');
         console.log('[Text Generation] Current phase:', currentPhase);
 

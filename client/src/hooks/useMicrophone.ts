@@ -11,6 +11,7 @@ export const useMicrophone = (options: UseMicrophoneOptions = {}) => {
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [interimResult, setInterimResult] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const recognitionRef = useRef<any>(null);
@@ -57,7 +58,12 @@ export const useMicrophone = (options: UseMicrophoneOptions = {}) => {
 
         const currentTranscript = finalTranscript || interimTranscript;
         setTranscript(currentTranscript);
-        lastTranscriptRef.current = currentTranscript; // Always save the latest transcript
+        setInterimResult(interimTranscript); // Store interim separately
+
+        // Only track interim in the ref for onend handling
+        // If we have a final transcript, it's about to be sent via callback, so we don't need to save it for onend
+        // If there is NO final transcript, we save the interim so onend can send it if needed
+        lastTranscriptRef.current = interimTranscript;
 
         if (finalTranscript) {
           console.log('[useMicrophone] 📝 Final transcript chunk:', finalTranscript.substring(0, 100));
@@ -137,6 +143,7 @@ export const useMicrophone = (options: UseMicrophoneOptions = {}) => {
     isListening,
     isProcessing,
     transcript,
+    interimResult, // Expose interim result for live display without duplication
     error,
     startListening,
     stopListening,

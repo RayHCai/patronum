@@ -54,14 +54,19 @@ export default function Session() {
     text: string;
   } | null>(null);
 
-  const { transcript, startListening, stopListening, isListening } = useMicrophone({
+  const { transcript, interimResult, startListening, stopListening, isListening } = useMicrophone({
     onTranscript: (text) => {
       // Accumulate transcripts during the turn
-      console.log('[Session] Transcript chunk received:', text.substring(0, 50));
+      console.log('[Session] ----------------------------------------');
+      console.log('[Session] onTranscript received:', text.substring(0, 50));
       setAccumulatedTranscript((prev) => {
         const newText = prev ? `${prev} ${text}` : text;
+        console.log('[Session] Stitching transcript:');
+        console.log('[Session]   Previous:', prev);
+        console.log('[Session]   New chunk:', text);
+        console.log('[Session]   Result:', newText);
         accumulatedTranscriptRef.current = newText; // Keep ref in sync
-        setLiveTranscript(newText);
+        // We don't set live transcript here directly, the effect below handles it combining with interim
         return newText;
       });
     },
@@ -256,11 +261,25 @@ export default function Session() {
   }, [micState, startListening]);
 
   // Update live transcript from continuous recording
+  // Combine accumulated finalized text with current interim result
   useEffect(() => {
-    if (transcript && isListening) {
-      setLiveTranscript(transcript);
+    if (isListening) {
+      // If we have an interim result, append it to accumulated
+      // If not, just show accumulated
+      console.log('[Session] Updating live transcript:', {
+        accumulated: accumulatedTranscript,
+        interim: interimResult,
+      });
+
+      const liveText = interimResult
+        ? `${accumulatedTranscript} ${interimResult}`.trim()
+        : accumulatedTranscript;
+
+      if (liveText !== liveTranscript) {
+        setLiveTranscript(liveText);
+      }
     }
-  }, [transcript, isListening]);
+  }, [interimResult, accumulatedTranscript, isListening]);
 
   // Update subtitle for participant speech in real-time
   useEffect(() => {
@@ -295,15 +314,19 @@ export default function Session() {
       console.log('[Session] Transcript preview (interim):', interimTranscript.substring(0, 100));
 
       // Use accumulated transcript if available, otherwise fall back to interim
-      const transcriptToUse = currentTranscript.trim() || interimTranscript.trim();
+      // IMPORTANT: Prefer the ref as it has the latest stitched content
+      const transcriptToUse = accumulatedTranscriptRef.current.trim() || interimTranscript.trim();
 
       if (transcriptToUse.length > 0) {
         // If we're using interim transcript, update the accumulated transcript
+        // If we're using interim transcript because accumulated was empty, update it now
         if (!currentTranscript.trim() && interimTranscript.trim()) {
           console.log('[Session] ℹ️ Using interim transcript as fallback');
           setAccumulatedTranscript(interimTranscript);
           accumulatedTranscriptRef.current = interimTranscript;
-          setLiveTranscript(interimTranscript);
+          // Don't update live transcript here to avoid flicker
+        } else {
+          console.log('[Session] ℹ️ Using existing accumulated transcript');
         }
         console.log('[Session] ✅ Transcript ready, showing confirmation screen');
         setMicState('confirming');
@@ -368,8 +391,11 @@ export default function Session() {
     console.log('[Session] ✅ USER CONFIRMED TRANSCRIPT');
     console.log('[Session] ========================================');
     console.log('[Session] Session ID:', sessionId || 'MISSING');
-    console.log('[Session] Transcript length:', accumulatedTranscript.length);
-    console.log('[Session] Transcript (first 200 chars):', accumulatedTranscript.substring(0, 200));
+
+    // Use REF to get the absolute latest value, avoiding stale closures
+    const currentTranscript = accumulatedTranscriptRef.current;
+    console.log('[Session] Transcript length:', currentTranscript.length);
+    console.log('[Session] Transcript (first 200 chars):', currentTranscript.substring(0, 200));
 
     if (!sessionId) {
       console.error('[Session] ❌ Cannot submit - missing sessionId');
@@ -377,7 +403,7 @@ export default function Session() {
       return;
     }
 
-    if (!accumulatedTranscript.trim()) {
+    if (!currentTranscript.trim()) {
       console.error('[Session] ❌ Cannot submit - transcript is empty');
       console.error('[Session] Returning to recording...');
       setMicState('your-turn');
@@ -385,13 +411,13 @@ export default function Session() {
     }
 
     console.log('[Session] ✅ Validation passed, proceeding with submission');
-    console.log('[Session] Full transcript:', accumulatedTranscript);
+    console.log('[Session] Full transcript:', currentTranscript);
 
     // Stop any ongoing speech recognition immediately
     console.log('[Session] 🛑 Stopping speech recognition');
     stopListening();
 
-    const submittedTranscript = accumulatedTranscript;
+    const submittedTranscript = currentTranscript;
 
     // Clear both transcripts
     console.log('[Session] 🧹 Clearing transcript buffers');

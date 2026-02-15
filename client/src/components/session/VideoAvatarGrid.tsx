@@ -29,10 +29,14 @@ export default function VideoAvatarGrid({
 
     // Determine columns based on total participants (Zoom-like logic)
     let columns: number;
-    if (totalParticipants <= 2) columns = 2;
-    else if (totalParticipants <= 4) columns = 2;
-    else if (totalParticipants <= 6) columns = 3;
-    else if (totalParticipants <= 9) columns = 3;
+    if (totalParticipants <= 1) columns = 1;
+    else if (totalParticipants === 2) columns = 2;
+    // For 3 participants, use 3 columns to keep them in one symmetric row
+    // unless strictly vertical preference, but horizontal is usually better for video calls
+    else if (totalParticipants === 3) columns = 3;
+    else if (totalParticipants === 4) columns = 2; // 2x2 grid
+    else if (totalParticipants <= 6) columns = 3; // 3x2 grid
+    else if (totalParticipants <= 9) columns = 3; // 3x3 grid
     else columns = 4;
 
     const rows = Math.ceil(totalParticipants / columns);
@@ -60,8 +64,8 @@ export default function VideoAvatarGrid({
           {moderator && (() => {
             // Check if moderator has a valid heygenConfig
             const hasValidConfig = moderator.heygenConfig &&
-                                   moderator.heygenConfig.avatarId &&
-                                   moderator.heygenConfig.avatarId.trim().length > 0;
+              moderator.heygenConfig.avatarId &&
+              moderator.heygenConfig.avatarId.trim().length > 0;
 
             return (
               <motion.div

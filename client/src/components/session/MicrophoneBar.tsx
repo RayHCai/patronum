@@ -68,7 +68,7 @@ export default function MicrophoneBar({
       animate={config.pulse ? { scale: [1, 1.01, 1] } : {}}
       transition={{ duration: 1.5, repeat: config.pulse ? Infinity : 0 }}
     >
-      <div className="flex items-center gap-6 w-full max-w-5xl justify-between">
+      <div className="flex items-center gap-12 w-full max-w-4xl justify-center">
         {/* Left: Emoji & Status */}
         <div className="flex items-center gap-6">
           {/* Emoji Indicator */}
