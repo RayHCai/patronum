@@ -2,18 +2,19 @@
 node_modules/
 .pnp
 .pnp.js
+.venv/
+venv/
 
 # Build outputs
 dist/
 build/
+out/
 *.tsbuildinfo
 
 # Environment variables
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
 
 # Logs
 npm-debug.log*
@@ -29,6 +30,7 @@ logs/
 *.swo
 *~
 .DS_Store
+Thumbs.db
 
 # Prisma
 prisma/migrations/
@@ -40,13 +42,22 @@ uploads/
 *.wav
 *.m4a
 
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
 # Testing
 coverage/
 .nyc_output/
 
 # Misc
 .cache/
+.turbo/
 temp/
 tmp/
 
+# AI tool files
 .claude/
+CLAUDE.md
+AGENTS.md
