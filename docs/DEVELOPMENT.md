@@ -1,9 +1,9 @@
 # Patronum - AI-Powered Cognitive Stimulation Therapy
 
 ## Inspiration
-Dementia affects over 55 million people worldwide, yet access to effective treatment remains deeply unequal. Cognitive Stimulation Therapy (CST) — a structured program of themed activities proven to improve memory, reasoning, and social engagement — is [most effective in group settings](https://pubmed.ncbi.nlm.nih.gov/34942157/). But for patients in rural or underserved areas, attending regular group sessions often means long, impractical travel. Meanwhile, family caregivers are stretched to their limits, reporting mental breakdowns, burnout, and zero time for themselves. We wanted to build something that bridges the access gap for patients while giving caregivers the visibility and breathing room they desperately need. 
+Dementia affects over 55 million people worldwide, yet access to effective treatment remains deeply unequal. Cognitive Stimulation Therapy (CST), a structured program of themed activities proven to improve memory, reasoning, and social engagement, is [most effective in group settings](https://pubmed.ncbi.nlm.nih.gov/34942157/). But for patients in rural or underserved areas, attending regular group sessions often means long, impractical travel. Meanwhile, family caregivers are stretched to their limits, reporting mental breakdowns, burnout, and zero time for themselves. We wanted to build something that bridges the access gap for patients while giving caregivers the visibility and breathing room they desperately need. 
 
-We also wanted to raise awareness for the incredibly difficult work that many caregivers go through, drawing inspiration from the stories shared in communities like r/dementia, where family members openly describe the emotional exhaustion, financial strain, role reversal, and constant uncertainty that come with caring for a loved one with cognitive decline—often while balancing jobs, parenting, and their own mental health, with little formal support. We noticed positive support of AI assisted therapy for dementia patients by caregivers on r/dementia and felt that a project like ours would be appropriate method for eliviating some of the stress that caregivers go through. 
+We also wanted to raise awareness for the incredibly difficult work that many caregivers go through, drawing inspiration from the stories shared in communities like r/dementia, where family members openly describe the emotional exhaustion, financial strain, role reversal, and constant uncertainty that come with caring for a loved one with cognitive decline, often while balancing jobs, parenting, and their own mental health, with little formal support. We noticed positive support of AI assisted therapy for dementia patients by caregivers on r/dementia and felt that a project like ours would be appropriate method for eliviating some of the stress that caregivers go through. 
 
 
 ## What it does
@@ -30,7 +30,7 @@ Our tech stack combines modern tools for a robust, scalable solution:
 
 - **Frontend:** Built with React for a responsive, intuitive interface. Complex state management handles real-time session data and large analytics datasets seamlessly.
 - **Backend:** Handles session orchestration, user management, and data persistence with a focus on low-latency performance across concurrent AI participants.
-- **AI Processing:** Powered by Claude, our AI moderator and participants are carefully tuned for tone, safety, and clinical appropriateness — supportive and engaging without being condescending or confusing. Multiple AI agents run in real time with optimized prompting to keep conversations natural and responsive.
+- **AI Processing:** Powered by Claude, our AI moderator and participants are carefully tuned for tone, safety, and clinical appropriateness, supportive and engaging without being condescending or confusing. Multiple AI agents run in real time with optimized prompting to keep conversations natural and responsive.
 - **Real-time Updates:** WebSocket connections ensure live session updates and smooth caregiver dashboard experiences.
 
 ## Challenges we ran into
